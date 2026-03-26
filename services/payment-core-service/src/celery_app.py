@@ -21,4 +21,4 @@ celery.conf.update(
     },
 )
 
-celery.autodiscover_tasks(["src.tasks"])
+celery.conf.imports = ("src.tasks.outbox_task",)

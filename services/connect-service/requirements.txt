@@ -8,3 +8,5 @@ aiokafka==0.11.0
 celery[redis]==5.4.0
 redis==5.1.0
 httpx==0.27.0
+kafka-python-ng==2.2.2
+uuid6==2025.0.1

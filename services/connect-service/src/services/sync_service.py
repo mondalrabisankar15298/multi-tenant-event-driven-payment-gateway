@@ -25,9 +25,9 @@ async def _sync_merchant_created(pool, schema, payload):
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO public.merchants (merchant_id, name, email, schema_name, status, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (merchant_id) DO UPDATE SET name = $2, email = $3, status = $5
+            INSERT INTO public.merchants (merchant_id, name, email, schema_name, status, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            ON CONFLICT (merchant_id) DO UPDATE SET name = $2, email = $3, status = $5, updated_at = NOW()
             """,
             payload.get("merchant_id"), payload.get("name"), payload.get("email"),
             payload.get("schema_name"), payload.get("status", "active"),
@@ -121,12 +121,13 @@ async def _sync_payment_created(pool, schema, payload):
             payment_date = datetime.fromisoformat(str(payload["created_at"])).date() if payload.get("created_at") else datetime.utcnow().date()
             await conn.execute(
                 f"""
-                INSERT INTO {schema}.daily_revenue (date, total_amount, payment_count, net_revenue)
-                VALUES ($1, $2, 1, $2)
+                INSERT INTO {schema}.daily_revenue (date, total_amount, payment_count, net_revenue, created_at, updated_at)
+                VALUES ($1, $2, 1, $2, NOW(), NOW())
                 ON CONFLICT (date) DO UPDATE
                     SET total_amount = {schema}.daily_revenue.total_amount + $2,
                         payment_count = {schema}.daily_revenue.payment_count + 1,
-                        net_revenue = {schema}.daily_revenue.net_revenue + $2
+                        net_revenue = {schema}.daily_revenue.net_revenue + $2,
+                        updated_at = NOW()
                 """,
                 payment_date, float(payload["amount"]),
             )
@@ -134,11 +135,12 @@ async def _sync_payment_created(pool, schema, payload):
             # Update payment_method_stats
             await conn.execute(
                 f"""
-                INSERT INTO {schema}.payment_method_stats (method, total_amount, count)
-                VALUES ($1, $2, 1)
+                INSERT INTO {schema}.payment_method_stats (method, total_amount, count, created_at, updated_at)
+                VALUES ($1, $2, 1, NOW(), NOW())
                 ON CONFLICT (method) DO UPDATE
                     SET total_amount = {schema}.payment_method_stats.total_amount + $2,
-                        count = {schema}.payment_method_stats.count + 1
+                        count = {schema}.payment_method_stats.count + 1,
+                        updated_at = NOW()
                 """,
                 payload["method"], float(payload["amount"]),
             )
@@ -164,7 +166,8 @@ async def _sync_payment_captured(pool, schema, payload):
             await conn.execute(
                 f"""
                 UPDATE {schema}.daily_revenue
-                SET success_count = success_count + 1
+                SET success_count = success_count + 1,
+                    updated_at = NOW()
                 WHERE date = $1
                 """,
                 payment_date,
@@ -174,7 +177,8 @@ async def _sync_payment_captured(pool, schema, payload):
                 f"""
                 UPDATE {schema}.payment_method_stats
                 SET success_count = success_count + 1,
-                    success_rate = ROUND((success_count + 1)::DECIMAL / NULLIF(count, 0) * 100, 2)
+                    success_rate = ROUND((success_count + 1)::DECIMAL / NULLIF(count, 0) * 100, 2),
+                    updated_at = NOW()
                 WHERE method = $1
                 """,
                 payload["method"],
@@ -201,13 +205,14 @@ async def _sync_payment_failed(pool, schema, payload):
             )
             payment_date = datetime.fromisoformat(str(payload["created_at"])).date() if payload.get("created_at") else datetime.utcnow().date()
             await conn.execute(
-                f"UPDATE {schema}.daily_revenue SET failed_count = failed_count + 1 WHERE date = $1",
+                f"UPDATE {schema}.daily_revenue SET failed_count = failed_count + 1, updated_at = NOW() WHERE date = $1",
                 payment_date,
             )
             await conn.execute(
                 f"""
                 UPDATE {schema}.payment_method_stats
-                SET success_rate = ROUND(success_count::DECIMAL / NULLIF(count, 0) * 100, 2)
+                SET success_rate = ROUND(success_count::DECIMAL / NULLIF(count, 0) * 100, 2),
+                    updated_at = NOW()
                 WHERE method = $1
                 """,
                 payload["method"],
@@ -253,7 +258,8 @@ async def _sync_refund_initiated(pool, schema, payload):
                 f"""
                 UPDATE {schema}.daily_revenue
                 SET refund_amount = refund_amount + $1,
-                    net_revenue = net_revenue - $1
+                    net_revenue = net_revenue - $1,
+                    updated_at = NOW()
                 WHERE date = $2
                 """,
                 float(payload["amount"]), payment_date,

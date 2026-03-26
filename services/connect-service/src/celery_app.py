@@ -15,4 +15,4 @@ celery.conf.update(
     enable_utc=True,
 )
 
-celery.autodiscover_tasks(["src.tasks"])
+celery.conf.imports = ("src.tasks.webhook_retry_task",)

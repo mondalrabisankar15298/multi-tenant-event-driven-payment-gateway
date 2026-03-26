@@ -1,5 +1,6 @@
 from ..database import get_pool
 from ..utils.event_emitter import emit_event
+from uuid6 import uuid7
 
 
 async def create_refund(merchant_id: int, payment_id: str, amount: float,
@@ -20,13 +21,14 @@ async def create_refund(merchant_id: int, payment_id: str, amount: float,
                 raise ValueError("Refund amount exceeds payment amount")
 
             # Insert refund
+            refund_id = uuid7()
             refund = await conn.fetchrow(
                 f"""
-                INSERT INTO {schema}.refunds (payment_id, amount, reason)
-                VALUES ($1, $2, $3)
+                INSERT INTO {schema}.refunds (refund_id, payment_id, amount, reason)
+                VALUES ($1, $2, $3, $4)
                 RETURNING *
                 """,
-                payment_id, amount, reason,
+                refund_id, payment_id, amount, reason,
             )
 
             # Ledger entry

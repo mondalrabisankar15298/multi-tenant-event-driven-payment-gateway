@@ -1,8 +1,7 @@
 import json
 from ..database import get_pool
 from ..utils.event_emitter import emit_event
-
-
+from uuid6 import uuid7
 VALID_TRANSITIONS = {
     "created": ["authorized", "failed"],
     "authorized": ["captured"],
@@ -17,16 +16,16 @@ async def create_payment(merchant_id: int, customer_id: int, amount: float,
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
-            # 1. Insert payment
+            payment_id = uuid7()
             payment = await conn.fetchrow(
                 f"""
                 INSERT INTO {schema}.payments
-                    (customer_id, amount, currency, method, description, metadata)
-                VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+                    (payment_id, customer_id, amount, currency, method, description, metadata)
+                VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
                 RETURNING *
                 """,
-                customer_id, amount, currency, method, description,
-                json.dumps(metadata or {}),
+                payment_id, customer_id, amount, currency, method, description,
+                metadata or {},
             )
 
             # 2. Insert ledger entry

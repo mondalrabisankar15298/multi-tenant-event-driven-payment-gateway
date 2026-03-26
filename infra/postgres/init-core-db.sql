@@ -8,14 +8,15 @@ CREATE TABLE public.merchants (
     name            VARCHAR(255) NOT NULL,
     email           VARCHAR(255) UNIQUE NOT NULL,
     schema_name     VARCHAR(100) UNIQUE NOT NULL,
-    api_key         UUID DEFAULT gen_random_uuid(),
+    api_key         UUID,
     status          VARCHAR(20) DEFAULT 'active',
-    created_at      TIMESTAMPTZ DEFAULT NOW()
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Transactional outbox (domain events)
 CREATE TABLE public.domain_events (
-    event_id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id        UUID PRIMARY KEY,
     merchant_id     INT NOT NULL REFERENCES public.merchants(merchant_id),
     schema_name     VARCHAR(100) NOT NULL,
     event_type      VARCHAR(100) NOT NULL,
@@ -23,7 +24,8 @@ CREATE TABLE public.domain_events (
     entity_id       VARCHAR(100) NOT NULL,
     payload         JSONB NOT NULL,
     status          VARCHAR(20) DEFAULT 'pending',
-    created_at      TIMESTAMPTZ DEFAULT NOW()
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Index for outbox worker polling

@@ -78,7 +78,9 @@ async def ensure_merchant_schema(pool, schema_name: str):
                 success_count   INT DEFAULT 0,
                 failed_count    INT DEFAULT 0,
                 refund_amount   DECIMAL(12,2) DEFAULT 0,
-                net_revenue     DECIMAL(12,2) DEFAULT 0
+                net_revenue     DECIMAL(12,2) DEFAULT 0,
+                created_at      TIMESTAMPTZ DEFAULT NOW(),
+                updated_at      TIMESTAMPTZ DEFAULT NOW()
             )
         """)
 
@@ -89,7 +91,9 @@ async def ensure_merchant_schema(pool, schema_name: str):
                 total_amount    DECIMAL(12,2) DEFAULT 0,
                 count           INT DEFAULT 0,
                 success_count   INT DEFAULT 0,
-                success_rate    DECIMAL(5,2) DEFAULT 0
+                success_rate    DECIMAL(5,2) DEFAULT 0,
+                created_at      TIMESTAMPTZ DEFAULT NOW(),
+                updated_at      TIMESTAMPTZ DEFAULT NOW()
             )
         """)
 

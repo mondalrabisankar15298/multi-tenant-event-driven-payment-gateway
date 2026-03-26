@@ -5,7 +5,9 @@
 -- Idempotency tracking for DB Sync Consumer
 CREATE TABLE public.processed_events (
     event_id     UUID PRIMARY KEY,
-    processed_at TIMESTAMPTZ DEFAULT NOW()
+    processed_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at   TIMESTAMPTZ DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Webhook subscriptions
@@ -16,7 +18,8 @@ CREATE TABLE public.webhook_subscriptions (
     event_types      TEXT[] NOT NULL,
     secret           VARCHAR(255) NOT NULL,
     active           BOOLEAN DEFAULT TRUE,
-    created_at       TIMESTAMPTZ DEFAULT NOW()
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Webhook delivery audit log
@@ -29,7 +32,8 @@ CREATE TABLE public.delivery_logs (
     response_body    TEXT,
     success          BOOLEAN NOT NULL,
     next_retry_at    TIMESTAMPTZ,
-    created_at       TIMESTAMPTZ DEFAULT NOW()
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Dead Letter Queue for failed webhook deliveries
@@ -39,7 +43,8 @@ CREATE TABLE public.dead_letter_queue (
     event_id         UUID NOT NULL,
     payload          JSONB NOT NULL,
     failure_reason   TEXT,
-    created_at       TIMESTAMPTZ DEFAULT NOW()
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Merchant mirror (synced from write DB via merchant.created.v1 events)
@@ -49,5 +54,6 @@ CREATE TABLE public.merchants (
     email           VARCHAR(255),
     schema_name     VARCHAR(100) UNIQUE NOT NULL,
     status          VARCHAR(20) DEFAULT 'active',
-    created_at      TIMESTAMPTZ
+    created_at      TIMESTAMPTZ,
+    updated_at      TIMESTAMPTZ
 );

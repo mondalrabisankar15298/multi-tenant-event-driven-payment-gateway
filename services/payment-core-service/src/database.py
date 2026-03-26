@@ -4,6 +4,12 @@ from .config import settings
 pool = None
 
 
+import json
+
+async def init_connection(conn):
+    await conn.set_type_codec('jsonb', encoder=json.dumps, decoder=json.loads, schema='pg_catalog')
+    await conn.set_type_codec('json', encoder=json.dumps, decoder=json.loads, schema='pg_catalog')
+
 async def get_pool() -> asyncpg.Pool:
     global pool
     if pool is None:
@@ -11,6 +17,7 @@ async def get_pool() -> asyncpg.Pool:
             dsn=settings.core_db_dsn,
             min_size=5,
             max_size=20,
+            setup=init_connection
         )
     return pool
 

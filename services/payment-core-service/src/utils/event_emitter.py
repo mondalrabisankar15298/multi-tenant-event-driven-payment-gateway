@@ -1,5 +1,5 @@
 import json
-import uuid
+from uuid6 import uuid7
 from datetime import datetime, timezone
 
 
@@ -16,7 +16,7 @@ async def emit_event(conn, merchant_id: int, schema_name: str, event_type: str,
         VALUES
             ($1, $2, $3, $4, $5, $6, $7::jsonb, 'pending', $8)
         """,
-        uuid.uuid4(),
+        uuid7(),
         merchant_id,
         schema_name,
         event_type,

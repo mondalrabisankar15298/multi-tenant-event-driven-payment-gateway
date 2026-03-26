@@ -1,5 +1,6 @@
 import json
 from ..database import get_pool
+from uuid6 import uuid7
 from ..utils.event_emitter import emit_event
 
 
@@ -9,13 +10,14 @@ async def create_merchant(name: str, email: str) -> dict:
     async with pool.acquire() as conn:
         async with conn.transaction():
             # 1. Insert merchant record
+            api_key = uuid7()
             merchant = await conn.fetchrow(
                 """
-                INSERT INTO public.merchants (name, email, schema_name)
-                VALUES ($1, $2, $3)
+                INSERT INTO public.merchants (name, email, schema_name, api_key)
+                VALUES ($1, $2, $3, $4)
                 RETURNING *
                 """,
-                name, email, ""  # placeholder, will update
+                name, email, "", api_key
             )
             merchant_id = merchant["merchant_id"]
             schema_name = f"merchant_{merchant_id}"
@@ -42,7 +44,7 @@ async def create_merchant(name: str, email: str) -> dict:
 
             await conn.execute(f"""
                 CREATE TABLE {schema_name}.payments (
-                    payment_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    payment_id    UUID PRIMARY KEY,
                     customer_id   INT NOT NULL REFERENCES {schema_name}.customers(customer_id),
                     amount        DECIMAL(12,2) NOT NULL,
                     currency      VARCHAR(3) DEFAULT 'INR',
@@ -58,7 +60,7 @@ async def create_merchant(name: str, email: str) -> dict:
 
             await conn.execute(f"""
                 CREATE TABLE {schema_name}.refunds (
-                    refund_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    refund_id     UUID PRIMARY KEY,
                     payment_id    UUID NOT NULL REFERENCES {schema_name}.payments(payment_id),
                     amount        DECIMAL(12,2) NOT NULL,
                     reason        TEXT,
@@ -76,7 +78,8 @@ async def create_merchant(name: str, email: str) -> dict:
                     entry_type    VARCHAR(30) NOT NULL,
                     amount        DECIMAL(12,2) NOT NULL,
                     balance_after DECIMAL(12,2) NOT NULL,
-                    created_at    TIMESTAMPTZ DEFAULT NOW()
+                    created_at    TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at    TIMESTAMPTZ DEFAULT NOW()
                 )
             """)
 

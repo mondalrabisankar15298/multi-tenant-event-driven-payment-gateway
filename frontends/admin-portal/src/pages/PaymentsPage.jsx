@@ -9,6 +9,7 @@ export default function PaymentsPage() {
   const [customers, setCustomers] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ customer_id: '', amount: '', method: 'card', description: '' })
+  const [refundModal, setRefundModal] = useState({ show: false, paymentId: null, amount: '', reason: '' })
 
   const mid = selectedMerchant?.merchant_id
 
@@ -32,7 +33,22 @@ export default function PaymentsPage() {
       if (action === 'authorize') await api.authorizePayment(mid, paymentId)
       if (action === 'capture') await api.capturePayment(mid, paymentId)
       if (action === 'fail') await api.failPayment(mid, paymentId)
+      if (action === 'refund') {
+        setRefundModal({ show: true, paymentId, amount: '', reason: 'Requested by Admin' })
+        return
+      }
       await fetchPayments()
+    } catch (err) { alert(err.message) }
+  }
+
+  const handleRefundSubmit = async (e) => {
+    e.preventDefault()
+    try {
+      const amount = Number(refundModal.amount)
+      if (isNaN(amount) || amount <= 0) return alert("Invalid refund amount")
+      await api.createRefund(mid, refundModal.paymentId, { amount, reason: refundModal.reason })
+      await fetchPayments()
+      setRefundModal({ show: false, paymentId: null, amount: '', reason: '' })
     } catch (err) { alert(err.message) }
   }
 
@@ -56,6 +72,9 @@ export default function PaymentsPage() {
     }
     if (row.status === 'authorized') {
       btns.push(<button key="cap" className="btn btn-success btn-sm" onClick={() => handleAction('capture', row.payment_id)}>Capture</button>)
+    }
+    if (row.status === 'captured') {
+      btns.push(<button key="ref" className="btn btn-outline btn-sm" onClick={() => handleAction('refund', row.payment_id)}>Refund</button>)
     }
     return btns
   }
@@ -105,6 +124,28 @@ export default function PaymentsPage() {
               <div className="modal-actions">
                 <button type="button" className="btn btn-outline" onClick={() => setShowForm(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Create Payment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {refundModal.show && (
+        <div className="modal-overlay" onClick={() => setRefundModal({...refundModal, show: false})}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2 className="modal-title">Refund Payment</h2>
+            <form onSubmit={handleRefundSubmit}>
+              <div className="form-group">
+                <label>Refund Amount (₹)</label>
+                <input className="form-input" type="number" step="0.01" value={refundModal.amount} onChange={e => setRefundModal({...refundModal, amount: e.target.value})} required placeholder="e.g. 500" />
+              </div>
+              <div className="form-group">
+                <label>Reason</label>
+                <input className="form-input" value={refundModal.reason} onChange={e => setRefundModal({...refundModal, reason: e.target.value})} required />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-outline" onClick={() => setRefundModal({...refundModal, show: false})}>Cancel</button>
+                <button type="submit" className="btn btn-danger">Process Refund</button>
               </div>
             </form>
           </div>
