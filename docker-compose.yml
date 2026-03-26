@@ -1,0 +1,253 @@
+services:
+  # ─── INFRASTRUCTURE ─────────────────────────────────────
+
+  core-db:
+    image: postgres:16-alpine
+    container_name: core-db
+    environment:
+      POSTGRES_USER: ${CORE_DB_USER}
+      POSTGRES_PASSWORD: ${CORE_DB_PASSWORD}
+      POSTGRES_DB: ${CORE_DB_NAME}
+    ports:
+      - "5433:5432"
+    volumes:
+      - core-db-data:/var/lib/postgresql/data
+      - ./infra/postgres/init-core-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CORE_DB_USER} -d ${CORE_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - payment-platform
+
+  read-db:
+    image: postgres:16-alpine
+    container_name: read-db
+    environment:
+      POSTGRES_USER: ${READ_DB_USER}
+      POSTGRES_PASSWORD: ${READ_DB_PASSWORD}
+      POSTGRES_DB: ${READ_DB_NAME}
+    ports:
+      - "5434:5432"
+    volumes:
+      - read-db-data:/var/lib/postgresql/data
+      - ./infra/postgres/init-read-db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${READ_DB_USER} -d ${READ_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - payment-platform
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - payment-platform
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: redpanda
+    command:
+      - redpanda start
+      - --smp 1
+      - --memory 512M
+      - --overprovisioned
+      - --node-id 0
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --mode dev-container
+    ports:
+      - "19092:19092"
+      - "18081:18081"
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --brokers localhost:9092 | grep -q 'Healthy:.*true'"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 15s
+    networks:
+      - payment-platform
+
+  redpanda-console:
+    image: redpandadata/console:latest
+    container_name: redpanda-console
+    environment:
+      CONFIG_FILEPATH: ""
+      KAFKA_BROKERS: redpanda:9092
+      KAFKA_SCHEMAREGISTRY_ENABLED: "true"
+      KAFKA_SCHEMAREGISTRY_URLS: http://redpanda:8081
+    ports:
+      - "8080:8080"
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - payment-platform
+
+  topic-init:
+    image: redpandadata/redpanda:latest
+    container_name: topic-init
+    entrypoint: ["/bin/bash", "/scripts/topic-init.sh"]
+    volumes:
+      - ./infra/redpanda/topic-init.sh:/scripts/topic-init.sh
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    networks:
+      - payment-platform
+    restart: "no"
+
+  # ─── SYSTEM 1: Payment Core Service ─────────────────────
+
+  payment-core-service:
+    build:
+      context: ./services/payment-core-service
+      dockerfile: Dockerfile
+    container_name: payment-core-service
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    depends_on:
+      core-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - payment-platform
+    restart: unless-stopped
+
+  core-celery-worker:
+    build:
+      context: ./services/payment-core-service
+      dockerfile: Dockerfile
+    container_name: core-celery-worker
+    command: celery -A src.celery_app worker --beat --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      core-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - payment-platform
+    restart: unless-stopped
+
+  # ─── SYSTEM 2: Connect Service ──────────────────────────
+
+  connect-service:
+    build:
+      context: ./services/connect-service
+      dockerfile: Dockerfile
+    container_name: connect-service
+    ports:
+      - "8002:8002"
+    env_file:
+      - .env
+    depends_on:
+      core-db:
+        condition: service_healthy
+      read-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    networks:
+      - payment-platform
+    restart: unless-stopped
+
+  connect-celery-worker:
+    build:
+      context: ./services/connect-service
+      dockerfile: Dockerfile
+    container_name: connect-celery-worker
+    command: celery -A src.celery_app worker --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      read-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - payment-platform
+    restart: unless-stopped
+
+  # ─── SYSTEM 3: Merchant Dashboard Service ───────────────
+
+  merchant-dashboard-service:
+    build:
+      context: ./services/merchant-dashboard-service
+      dockerfile: Dockerfile
+    container_name: merchant-dashboard-service
+    ports:
+      - "8003:8003"
+    env_file:
+      - .env
+    depends_on:
+      read-db:
+        condition: service_healthy
+    networks:
+      - payment-platform
+    restart: unless-stopped
+
+  # ─── FRONTENDS ──────────────────────────────────────────
+
+  admin-portal:
+    build:
+      context: ./frontends/admin-portal
+      dockerfile: Dockerfile
+    container_name: admin-portal
+    ports:
+      - "5173:5173"
+    depends_on:
+      - payment-core-service
+    networks:
+      - payment-platform
+    restart: unless-stopped
+
+  merchant-dashboard:
+    build:
+      context: ./frontends/merchant-dashboard
+      dockerfile: Dockerfile
+    container_name: merchant-dashboard
+    ports:
+      - "5174:5174"
+    depends_on:
+      - merchant-dashboard-service
+    networks:
+      - payment-platform
+    restart: unless-stopped
+
+volumes:
+  core-db-data:
+  read-db-data:
+  redis-data:
+  redpanda-data:
+
+networks:
+  payment-platform:
+    driver: bridge
