@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     # Service
     CORE_SERVICE_PORT: int = 8001
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174"
 
     @property
     def core_db_url(self) -> str:

@@ -57,3 +57,11 @@ CREATE TABLE public.merchants (
     created_at      TIMESTAMPTZ,
     updated_at      TIMESTAMPTZ
 );
+
+-- Consumer Dead Letter Queue
+CREATE TABLE public.consumer_dead_letter (
+    event_id        UUID PRIMARY KEY,
+    event_data      JSONB NOT NULL,
+    error           TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);

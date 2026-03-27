@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     READ_DB_PASSWORD: str = "payment_secret"
     READ_DB_NAME: str = "payment_read"
     DASHBOARD_SERVICE_PORT: int = 8003
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174"
 
     @property
     def read_db_dsn(self) -> str:

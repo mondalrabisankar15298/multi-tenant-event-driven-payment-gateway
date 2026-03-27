@@ -3,23 +3,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-async def check_and_mark(pool, event_id: str) -> bool:
-    """Check if event was already processed. Returns True if already processed."""
+async def try_claim_event(pool, event_id) -> bool:
+    """Returns True if WE claimed it (proceed). False if already claimed."""
     async with pool.acquire() as conn:
-        existing = await conn.fetchrow(
-            "SELECT event_id FROM public.processed_events WHERE event_id = $1",
+        row = await conn.fetchrow(
+            "INSERT INTO public.processed_events (event_id) VALUES ($1) "
+            "ON CONFLICT DO NOTHING RETURNING event_id",
             event_id,
         )
-        if existing:
+        if not row:
             logger.info(f"Event {event_id} already processed, skipping")
-            return True
-        return False
-
-
-async def mark_processed(pool, event_id: str):
-    """Mark event as processed."""
-    async with pool.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO public.processed_events (event_id) VALUES ($1) ON CONFLICT DO NOTHING",
-            event_id,
-        )
+        return row is not None

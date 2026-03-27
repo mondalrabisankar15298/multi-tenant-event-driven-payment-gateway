@@ -7,15 +7,29 @@ export default function CustomersPage() {
   const { selectedMerchant } = useMerchant()
   const [customers, setCustomers] = useState([])
   const [showForm, setShowForm] = useState(false)
+  const [editingCustomer, setEditingCustomer] = useState(null)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
+  const [viewingCustomer, setViewingCustomer] = useState(null)
 
   const mid = selectedMerchant?.merchant_id
 
   useEffect(() => {
     if (mid) fetchCustomers()
   }, [mid])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowForm(false)
+        setEditingCustomer(null)
+        setViewingCustomer(null)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const fetchCustomers = async () => {
     const data = await api.getCustomers(mid)
@@ -30,6 +44,22 @@ export default function CustomersPage() {
     setName(''); setEmail(''); setPhone('')
   }
 
+  const openEdit = (cust) => {
+    setEditingCustomer(cust)
+    setName(cust.name || '')
+    setEmail(cust.email || '')
+    setPhone(cust.phone || '')
+  }
+
+  const handleUpdate = async (e) => {
+    e.preventDefault()
+    try {
+      await api.updateCustomer(mid, editingCustomer.customer_id, { name, email, phone })
+      await fetchCustomers()
+      setEditingCustomer(null)
+    } catch (err) { alert(err.message) }
+  }
+
   const handleDelete = async (id) => {
     if (!confirm('Delete this customer?')) return
     await api.deleteCustomer(mid, id)
@@ -39,7 +69,11 @@ export default function CustomersPage() {
   if (!mid) return <div className="empty-state"><h3>Select a merchant to manage customers</h3></div>
 
   const columns = [
-    { key: 'customer_id', label: 'ID' },
+    { 
+      key: 'customer_id', 
+      label: 'ID',
+      render: (v) => <span style={{ color: 'var(--accent-primary)' }}>{v}</span>
+    },
     { key: 'name', label: 'Name' },
     { key: 'email', label: 'Email' },
     { key: 'phone', label: 'Phone' },
@@ -57,8 +91,12 @@ export default function CustomersPage() {
         <DataTable
           columns={columns}
           data={customers}
+          onRowClick={setViewingCustomer}
           actions={(row) => (
-            <button className="btn btn-danger btn-sm" onClick={() => handleDelete(row.customer_id)}>Delete</button>
+            <>
+              <button className="btn btn-outline btn-sm" onClick={(e) => { e.stopPropagation(); openEdit(row); }}>Edit</button>
+              <button className="btn btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); handleDelete(row.customer_id); }}>Delete</button>
+            </>
           )}
         />
       </div>
@@ -85,6 +123,54 @@ export default function CustomersPage() {
                 <button type="submit" className="btn btn-primary">Create</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {editingCustomer && (
+        <div className="modal-overlay" onClick={() => setEditingCustomer(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2 className="modal-title">Edit Customer</h2>
+            <form onSubmit={handleUpdate}>
+              <div className="form-group">
+                <label>Full Name</label>
+                <input className="form-input" value={name} onChange={e => setName(e.target.value)} required />
+              </div>
+              <div className="form-group">
+                <label>Email</label>
+                <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label>Phone</label>
+                <input className="form-input" value={phone} onChange={e => setPhone(e.target.value)} />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-outline" onClick={() => setEditingCustomer(null)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Changes</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {viewingCustomer && (
+        <div className="modal-overlay" onClick={() => setViewingCustomer(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 800 }}>
+            <h2 className="modal-title">Customer Details</h2>
+            <pre style={{ 
+              background: '#f8fafc', 
+              color: '#0f172a', 
+              padding: 16, 
+              borderRadius: 8, 
+              overflowX: 'auto', 
+              fontSize: 13,
+              border: '1px solid #e2e8f0',
+              lineHeight: '1.5'
+            }}>
+              {JSON.stringify(viewingCustomer, null, 2)}
+            </pre>
+            <div className="modal-actions">
+              <button className="btn btn-primary" onClick={() => setViewingCustomer(null)}>Close</button>
+            </div>
           </div>
         </div>
       )}

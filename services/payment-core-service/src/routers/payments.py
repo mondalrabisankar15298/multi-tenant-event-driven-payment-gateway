@@ -1,8 +1,13 @@
-from fastapi import APIRouter, HTTPException
-from ..models.schemas import PaymentCreate, PaymentResponse
+from fastapi import APIRouter, Depends, HTTPException
+from ..models.schemas import PaymentCreate, PaymentResponse, PaymentUpdate
 from ..services import payment_service
+from ..utils.auth import verify_merchant_access
 
-router = APIRouter(prefix="/api/{merchant_id}/payments", tags=["payments"])
+router = APIRouter(
+    prefix="/api/{merchant_id}/payments",
+    tags=["payments"],
+    dependencies=[Depends(verify_merchant_access)]
+)
 
 
 @router.post("", response_model=PaymentResponse, status_code=201)
@@ -13,13 +18,13 @@ async def create_payment(merchant_id: int, data: PaymentCreate):
             data.method, data.description, data.metadata
         )
         return payment
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("", response_model=list[PaymentResponse])
-async def list_payments(merchant_id: int):
-    return await payment_service.list_payments(merchant_id)
+async def list_payments(merchant_id: int, limit: int = 50, offset: int = 0):
+    return await payment_service.list_payments(merchant_id, limit, offset)
 
 
 @router.get("/{payment_id}", response_model=PaymentResponse)
@@ -28,6 +33,19 @@ async def get_payment(merchant_id: int, payment_id: str):
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     return payment
+
+
+@router.put("/{payment_id}", response_model=PaymentResponse)
+async def update_payment(merchant_id: int, payment_id: str, data: PaymentUpdate):
+    try:
+        payment = await payment_service.update_payment(
+            merchant_id, payment_id, data.description, data.metadata
+        )
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+        return payment
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/{payment_id}/authorize", response_model=PaymentResponse)

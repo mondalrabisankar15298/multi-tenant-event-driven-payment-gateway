@@ -1,7 +1,9 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Literal
 from datetime import date, datetime
 from uuid import UUID
+from decimal import Decimal
+from pydantic import condecimal
 
 
 # ─── Merchant ─────────────────────────────────────────────
@@ -9,6 +11,12 @@ from uuid import UUID
 class MerchantCreate(BaseModel):
     name: str
     email: str
+
+
+class MerchantUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    status: Optional[Literal["active", "suspended"]] = None
 
 
 class MerchantResponse(BaseModel):
@@ -48,17 +56,22 @@ class CustomerResponse(BaseModel):
 
 class PaymentCreate(BaseModel):
     customer_id: UUID
-    amount: float
-    currency: str = "INR"
-    method: str  # card | upi | netbanking | wallet
+    amount: condecimal(gt=0, max_digits=12, decimal_places=2)
+    currency: Literal["INR", "USD", "EUR"] = "INR"
+    method: Literal["card", "upi", "netbanking", "wallet"]
     description: Optional[str] = None
-    metadata: Optional[dict] = {}
+    metadata: Optional[dict] = None
+
+
+class PaymentUpdate(BaseModel):
+    description: Optional[str] = None
+    metadata: Optional[dict] = None
 
 
 class PaymentResponse(BaseModel):
     payment_id: UUID
     customer_id: UUID
-    amount: float
+    amount: Decimal
     currency: str
     status: str
     method: str
@@ -72,14 +85,14 @@ class PaymentResponse(BaseModel):
 # ─── Refund ───────────────────────────────────────────────
 
 class RefundCreate(BaseModel):
-    amount: float
+    amount: condecimal(gt=0, max_digits=12, decimal_places=2)
     reason: Optional[str] = None
 
 
 class RefundResponse(BaseModel):
     refund_id: UUID
     payment_id: UUID
-    amount: float
+    amount: Decimal
     reason: Optional[str] = None
     status: str
     created_at: datetime

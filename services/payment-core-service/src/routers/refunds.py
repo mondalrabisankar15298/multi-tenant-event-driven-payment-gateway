@@ -1,8 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from ..models.schemas import RefundCreate, RefundResponse
 from ..services import refund_service
+from ..utils.auth import verify_merchant_access
 
-router = APIRouter(tags=["refunds"])
+router = APIRouter(
+    tags=["refunds"],
+    dependencies=[Depends(verify_merchant_access)]
+)
 
 
 @router.post("/api/{merchant_id}/payments/{payment_id}/refund", response_model=RefundResponse, status_code=201)
@@ -28,5 +32,5 @@ async def process_refund(merchant_id: int, refund_id: str):
 
 
 @router.get("/api/{merchant_id}/refunds", response_model=list[RefundResponse])
-async def list_refunds(merchant_id: int):
-    return await refund_service.list_refunds(merchant_id)
+async def list_refunds(merchant_id: int, limit: int = 50, offset: int = 0):
+    return await refund_service.list_refunds(merchant_id, limit, offset)

@@ -7,7 +7,8 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState([])
   const mid = selectedMerchant?.merchant_id
 
-  useEffect(() => { if (mid) api.getCustomers(mid).then(setCustomers) }, [mid])
+  const fetchCustomers = () => { if (mid) api.getCustomers(mid).then(setCustomers) }
+  useEffect(fetchCustomers, [mid])
 
   if (!mid) return <div className="empty-state"><h3>Select a merchant to view customers</h3></div>
 

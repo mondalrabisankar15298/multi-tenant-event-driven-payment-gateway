@@ -5,6 +5,8 @@ logger = logging.getLogger(__name__)
 
 async def ensure_merchant_schema(pool, schema_name: str):
     """Create the read-optimized merchant schema and tables if they don't exist."""
+    from ..utils.validators import validate_schema_name
+    schema_name = validate_schema_name(schema_name)
     async with pool.acquire() as conn:
         exists = await conn.fetchval(
             "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name = $1)",
@@ -20,7 +22,7 @@ async def ensure_merchant_schema(pool, schema_name: str):
         # Customers with precomputed aggregates
         await conn.execute(f"""
             CREATE TABLE {schema_name}.customers (
-                customer_id     INT PRIMARY KEY,
+                customer_id     UUID PRIMARY KEY,
                 name            VARCHAR(255) NOT NULL,
                 email           VARCHAR(255),
                 phone           VARCHAR(50),
@@ -36,7 +38,7 @@ async def ensure_merchant_schema(pool, schema_name: str):
         await conn.execute(f"""
             CREATE TABLE {schema_name}.payments (
                 payment_id      UUID PRIMARY KEY,
-                customer_id     INT NOT NULL,
+                customer_id     UUID NOT NULL,
                 customer_name   VARCHAR(255),
                 customer_email  VARCHAR(255),
                 amount          DECIMAL(12,2) NOT NULL,
@@ -46,6 +48,7 @@ async def ensure_merchant_schema(pool, schema_name: str):
                 description     TEXT,
                 failure_reason  VARCHAR(255),
                 metadata        JSONB DEFAULT '{{}}'::jsonb,
+                amount_refunded DECIMAL(12,2) DEFAULT 0.00,
                 created_at      TIMESTAMPTZ,
                 updated_at      TIMESTAMPTZ
             )

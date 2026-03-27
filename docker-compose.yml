@@ -135,6 +135,11 @@ services:
     networks:
       - payment-platform
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   core-celery-worker:
     build:
@@ -154,6 +159,11 @@ services:
     networks:
       - payment-platform
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
 
   # ─── SYSTEM 2: Connect Service ──────────────────────────
 
@@ -166,6 +176,8 @@ services:
       - "8002:8002"
     env_file:
       - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
     depends_on:
       core-db:
         condition: service_healthy
@@ -178,6 +190,11 @@ services:
     networks:
       - payment-platform
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
 
   connect-celery-worker:
     build:
@@ -187,6 +204,8 @@ services:
     command: celery -A src.celery_app worker --loglevel=info
     env_file:
       - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/1
     depends_on:
       read-db:
         condition: service_healthy
@@ -195,6 +214,11 @@ services:
     networks:
       - payment-platform
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
 
   # ─── SYSTEM 3: Merchant Dashboard Service ───────────────
 
@@ -213,6 +237,11 @@ services:
     networks:
       - payment-platform
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
 
   # ─── FRONTENDS ──────────────────────────────────────────
 

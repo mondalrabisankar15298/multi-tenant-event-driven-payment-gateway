@@ -9,7 +9,7 @@ from ..config import settings
 logger = logging.getLogger(__name__)
 
 
-async def start_webhook_consumer():
+async def start_webhook_consumer(shutdown_event: asyncio.Event):
     """Consumer Group 2: Webhook Delivery — Dispatch HMAC-signed webhooks."""
     consumer = AIOKafkaConsumer(
         settings.KAFKA_TOPIC,
@@ -20,13 +20,14 @@ async def start_webhook_consumer():
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
     )
 
-    while True:
+    while not shutdown_event.is_set():
         try:
             await consumer.start()
             pool = await get_pool()
             logger.info("Webhook consumer started")
 
-            async for msg in consumer:
+            while not shutdown_event.is_set():
+                msg = await asyncio.wait_for(consumer.getone(), timeout=1.0)
                 event = msg.value
                 logger.info(f"Webhook consumer received: {event.get('event_type')}")
 
@@ -37,6 +38,8 @@ async def start_webhook_consumer():
 
                 await consumer.commit()
 
+        except asyncio.TimeoutError:
+            continue
         except Exception as e:
             logger.error(f"Webhook consumer error: {e}")
             await asyncio.sleep(5)

@@ -1,27 +1,38 @@
-from ..database import get_pool
-from ..utils.event_emitter import emit_event
 from uuid6 import uuid7
+from datetime import datetime, timezone
+from ..database import get_pool
+from .merchant_service import get_merchant_schema
+from ..utils.event_emitter import emit_event
+from decimal import Decimal
 
 
-async def create_refund(merchant_id: int, payment_id: str, amount: float,
+async def create_refund(merchant_id: int, payment_id: str, amount: Decimal,
                         reason: str = None) -> dict:
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
             # Resolve payment UUID → internal BIGINT id
             pay = await conn.fetchrow(
-                f"SELECT id, payment_id, amount, status, customer_ref FROM {schema}.payments WHERE payment_id = $1",
+                f"SELECT id, payment_id, amount, amount_refunded, status, customer_ref FROM {schema}.payments WHERE payment_id = $1 FOR UPDATE",
                 payment_id
             )
             if not pay:
                 raise ValueError("Payment not found")
             if pay["status"] not in ("captured", "settled"):
                 raise ValueError(f"Cannot refund payment with status: {pay['status']}")
-            if amount > float(pay["amount"]):
-                raise ValueError("Refund amount exceeds payment amount")
+
+            refund_remaining = Decimal(str(pay["amount"])) - Decimal(str(pay.get("amount_refunded") or 0))
+            if amount > refund_remaining:
+                raise ValueError(f"Refund amount ({amount}) exceeds remaining payment balance ({refund_remaining})")
 
             payment_internal_id = pay["id"]
+
+            # Atomically reserve the refunded amount on the payment record
+            await conn.execute(
+                f"UPDATE {schema}.payments SET amount_refunded = amount_refunded + $1 WHERE id = $2",
+                amount, payment_internal_id
+            )
 
             # Resolve customer UUID for event payload
             cust = await conn.fetchrow(
@@ -62,7 +73,7 @@ async def create_refund(merchant_id: int, payment_id: str, amount: float,
             )
 
             # Emit event with UUID-only payload
-            event_payload = {**refund, "payment_amount": float(pay["amount"])}
+            event_payload = {**refund, "payment_amount": Decimal(str(pay["amount"]))}
             if cust:
                 event_payload["customer_id"] = str(cust["customer_id"])
             await emit_event(
@@ -78,7 +89,7 @@ async def create_refund(merchant_id: int, payment_id: str, amount: float,
 
 
 async def process_refund(merchant_id: int, refund_id: str) -> dict | None:
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -94,11 +105,11 @@ async def process_refund(merchant_id: int, refund_id: str) -> dict | None:
             updated_row = await conn.fetchrow(
                 f"""
                 UPDATE {schema}.refunds
-                SET status = 'processed', updated_at = NOW()
+                SET status = 'processed', updated_at = $2
                 WHERE refund_id = $1
                 RETURNING refund_id, payment_ref, amount, reason, status, created_at, updated_at
                 """,
-                refund_id,
+                refund_id, datetime.now(timezone.utc)
             )
 
             # Resolve payment UUID for response
@@ -123,8 +134,8 @@ async def process_refund(merchant_id: int, refund_id: str) -> dict | None:
             return updated
 
 
-async def list_refunds(merchant_id: int) -> list[dict]:
-    schema = f"merchant_{merchant_id}"
+async def list_refunds(merchant_id: int, limit: int = 50, offset: int = 0) -> list[dict]:
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -134,6 +145,8 @@ async def list_refunds(merchant_id: int) -> list[dict]:
             FROM {schema}.refunds r
             JOIN {schema}.payments p ON p.id = r.payment_ref
             ORDER BY r.created_at DESC
-            """
+            LIMIT $1 OFFSET $2
+            """,
+            limit, offset
         )
         return [dict(r) for r in rows]

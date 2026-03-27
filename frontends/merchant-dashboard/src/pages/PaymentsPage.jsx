@@ -6,7 +6,7 @@ export default function PaymentsPage() {
   const { selectedMerchant } = useMerchant()
   const [result, setResult] = useState({ data: [], total: 0, page: 1, pages: 0 })
   const [filters, setFilters] = useState({ status: '', method: '', page: 1 })
-
+  
   const mid = selectedMerchant?.merchant_id
 
   useEffect(() => { if (mid) fetchPayments() }, [mid, filters])

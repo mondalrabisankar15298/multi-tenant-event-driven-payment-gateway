@@ -60,19 +60,21 @@ def publish_pending_events(self):
                     key=event["merchant_id"],
                     value=message,
                 )
-                producer.flush()
-
-                cur.execute(
-                    "UPDATE public.domain_events SET status = 'published' WHERE event_id = %s",
-                    (str(event["event_id"]),)
-                )
-                conn.commit()
-                published_count += 1
-                logger.info(f"Published event: {event['event_type']} for merchant {event['merchant_id']}")
-
             except Exception as e:
-                conn.rollback()
-                logger.error(f"Failed to publish event {event['event_id']}: {e}")
+                logger.error(f"Failed to submit event {event['event_id']} to producer: {e}")
+        
+        # Flush all messages together
+        producer.flush()
+
+        # Update all statuses in one go
+        ids = [str(e["event_id"]) for e in events]
+        cur.execute(
+            "UPDATE public.domain_events SET status = 'published' WHERE event_id = ANY(%s)",
+            (ids,)
+        )
+        conn.commit()
+        published_count = len(ids)
+        logger.info(f"Published {published_count} events")
 
         return {"published": published_count}
 

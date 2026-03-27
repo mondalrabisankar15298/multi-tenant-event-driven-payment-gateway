@@ -1,12 +1,16 @@
-from fastapi import APIRouter
-from ..database import get_pool
+
+from typing import List
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException
+from ..database import get_pool, get_merchant_schema
 
 router = APIRouter(prefix="/api/{merchant_id}/customers", tags=["customers"])
 
 
 @router.get("")
 async def list_customers(merchant_id: int, limit: int = 100):
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -24,8 +28,8 @@ async def list_customers(merchant_id: int, limit: int = 100):
 
 
 @router.get("/{customer_id}")
-async def get_customer(merchant_id: int, customer_id: int):
-    schema = f"merchant_{merchant_id}"
+async def get_customer(merchant_id: int, customer_id: uuid.UUID):
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(

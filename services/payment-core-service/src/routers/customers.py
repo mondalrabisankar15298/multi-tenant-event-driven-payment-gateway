@@ -1,8 +1,13 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from ..models.schemas import CustomerCreate, CustomerUpdate, CustomerResponse
 from ..services import customer_service
+from ..utils.auth import verify_merchant_access
 
-router = APIRouter(prefix="/api/{merchant_id}/customers", tags=["customers"])
+router = APIRouter(
+    prefix="/api/{merchant_id}/customers", 
+    tags=["customers"],
+    dependencies=[Depends(verify_merchant_access)]
+)
 
 
 @router.post("", response_model=CustomerResponse, status_code=201)
@@ -12,13 +17,13 @@ async def create_customer(merchant_id: int, data: CustomerCreate):
             merchant_id, data.name, data.email, data.phone
         )
         return customer
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("", response_model=list[CustomerResponse])
-async def list_customers(merchant_id: int):
-    return await customer_service.list_customers(merchant_id)
+async def list_customers(merchant_id: int, limit: int = 50, offset: int = 0):
+    return await customer_service.list_customers(merchant_id, limit, offset)
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)

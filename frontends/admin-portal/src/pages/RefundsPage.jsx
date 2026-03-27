@@ -6,11 +6,18 @@ import DataTable from '../components/DataTable'
 export default function RefundsPage() {
   const { selectedMerchant } = useMerchant()
   const [refunds, setRefunds] = useState([])
+  const [viewingRefund, setViewingRefund] = useState(null)
   const mid = selectedMerchant?.merchant_id
 
   useEffect(() => {
     if (mid) fetchRefunds()
   }, [mid])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => { if (e.key === 'Escape') setViewingRefund(null) }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
   const fetchRefunds = async () => setRefunds(await api.getRefunds(mid))
 
@@ -24,7 +31,11 @@ export default function RefundsPage() {
   if (!mid) return <div className="empty-state"><h3>Select a merchant to view refunds</h3></div>
 
   const columns = [
-    { key: 'refund_id', label: 'Refund ID', render: (v) => v?.substring(0, 8) + '...' },
+    { 
+      key: 'refund_id', 
+      label: 'Refund ID', 
+      render: (v) => <span style={{ color: 'var(--accent-primary)' }}>{v?.substring(0, 8)}...</span> 
+    },
     { key: 'payment_id', label: 'Payment ID', render: (v) => v?.substring(0, 8) + '...' },
     { key: 'amount', label: 'Amount', render: (v) => `₹${Number(v).toLocaleString()}` },
     { key: 'reason', label: 'Reason' },
@@ -39,13 +50,42 @@ export default function RefundsPage() {
         <DataTable
           columns={columns}
           data={refunds}
+          onRowClick={setViewingRefund}
           actions={(row) =>
             row.status === 'initiated' ? (
-              <button className="btn btn-success btn-sm" onClick={() => handleProcess(row.refund_id)}>Process</button>
+              <button 
+                className="btn btn-success btn-sm" 
+                onClick={(e) => { e.stopPropagation(); handleProcess(row.refund_id); }}
+              >
+                Process
+              </button>
             ) : null
           }
         />
       </div>
+
+      {viewingRefund && (
+        <div className="modal-overlay" onClick={() => setViewingRefund(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 800 }}>
+            <h2 className="modal-title">Refund Details</h2>
+            <pre style={{ 
+              background: '#f8fafc', 
+              color: '#0f172a', 
+              padding: 16, 
+              borderRadius: 8, 
+              overflowX: 'auto', 
+              fontSize: 13,
+              border: '1px solid #e2e8f0',
+              lineHeight: '1.5'
+            }}>
+              {JSON.stringify(viewingRefund, null, 2)}
+            </pre>
+            <div className="modal-actions">
+              <button className="btn btn-primary" onClick={() => setViewingRefund(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

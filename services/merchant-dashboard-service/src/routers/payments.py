@@ -1,6 +1,9 @@
-from fastapi import APIRouter, Query
+import json
+import uuid
 from typing import Optional
-from ..database import get_pool
+
+from fastapi import APIRouter, Depends, Query
+from ..database import get_pool, get_merchant_schema
 
 router = APIRouter(prefix="/api/{merchant_id}/payments", tags=["payments"])
 
@@ -10,7 +13,7 @@ async def list_payments(
     merchant_id: int,
     status: Optional[str] = None,
     method: Optional[str] = None,
-    customer_id: Optional[int] = None,
+    customer_id: Optional[uuid.UUID] = None,
     min_amount: Optional[float] = None,
     max_amount: Optional[float] = None,
     from_date: Optional[str] = Query(None, alias="from"),
@@ -18,7 +21,7 @@ async def list_payments(
     page: int = 1,
     limit: int = 25,
 ):
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         # Build dynamic WHERE clause
@@ -86,7 +89,7 @@ async def list_payments(
 
 @router.get("/{payment_id}")
 async def get_payment(merchant_id: int, payment_id: str):
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(

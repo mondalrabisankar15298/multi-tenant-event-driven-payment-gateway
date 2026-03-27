@@ -1,10 +1,12 @@
 from ..database import get_pool
+from .merchant_service import get_merchant_schema
+from datetime import datetime, timezone
 from ..utils.event_emitter import emit_event
 from uuid6 import uuid7
 
 
 async def create_customer(merchant_id: int, name: str, email: str = None, phone: str = None) -> dict:
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -31,7 +33,7 @@ async def create_customer(merchant_id: int, name: str, email: str = None, phone:
 
 async def update_customer(merchant_id: int, customer_id: str,
                           name: str = None, email: str = None, phone: str = None) -> dict | None:
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -47,11 +49,11 @@ async def update_customer(merchant_id: int, customer_id: str,
                 SET name = COALESCE($1, name),
                     email = COALESCE($2, email),
                     phone = COALESCE($3, phone),
-                    updated_at = NOW()
+                    updated_at = $5
                 WHERE customer_id = $4
                 RETURNING customer_id, name, email, phone, created_at, updated_at
                 """,
-                name, email, phone, customer_id,
+                name, email, phone, customer_id, datetime.now(timezone.utc),
             )
             await emit_event(
                 conn,
@@ -66,7 +68,7 @@ async def update_customer(merchant_id: int, customer_id: str,
 
 
 async def delete_customer(merchant_id: int, customer_id: str) -> bool:
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -92,7 +94,7 @@ async def delete_customer(merchant_id: int, customer_id: str) -> bool:
 
 
 async def list_customers(merchant_id: int) -> list[dict]:
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -102,7 +104,7 @@ async def list_customers(merchant_id: int) -> list[dict]:
 
 
 async def get_customer(merchant_id: int, customer_id: str) -> dict | None:
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(

@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from ..database import get_pool
+from ..database import get_pool, get_merchant_schema
 
 router = APIRouter(prefix="/api/{merchant_id}/analytics", tags=["analytics"])
 
@@ -7,7 +7,7 @@ router = APIRouter(prefix="/api/{merchant_id}/analytics", tags=["analytics"])
 @router.get("/summary")
 async def get_summary(merchant_id: int):
     """Total revenue, payment count, success rate, and average payment amount."""
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         stats = await conn.fetchrow(
@@ -45,7 +45,7 @@ async def get_summary(merchant_id: int):
 @router.get("/daily")
 async def get_daily_revenue(merchant_id: int, days: int = 30):
     """Daily revenue breakdown for charts."""
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -64,7 +64,7 @@ async def get_daily_revenue(merchant_id: int, days: int = 30):
 @router.get("/methods")
 async def get_method_stats(merchant_id: int):
     """Payment method distribution."""
-    schema = f"merchant_{merchant_id}"
+    schema = await get_merchant_schema(merchant_id)
     pool = await get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(

@@ -1,8 +1,17 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.requests import Request
+import logging
+
 from .database import get_pool, close_pool
 from .routers import merchants, customers, payments, refunds
+from .utils.logger import setup_logging, get_logger
+from prometheus_client import make_asgi_app
+
+setup_logging()
+logger = get_logger(__name__)
 
 
 @asynccontextmanager
@@ -21,14 +30,28 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"}
+    )
+
+from .config import settings
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ORIGINS.split(","),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
 )
+
+# Prometheus metrics
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
 
 # Routers
 app.include_router(merchants.router)
@@ -58,4 +81,14 @@ async def get_events(status: str = None, limit: int = 50):
 
 @app.get("/health", tags=["health"])
 async def health_check():
-    return {"status": "healthy", "service": "payment-core-service"}
+    health_status = {"status": "healthy", "service": "payment-core-service", "components": {}}
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute("SELECT 1")
+            health_status["components"]["db"] = "ok"
+    except Exception as e:
+        health_status["status"] = "unhealthy"
+        health_status["components"]["db"] = f"error: {str(e)}"
+    
+    return health_status

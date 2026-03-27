@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { MerchantProvider } from './contexts/MerchantContext'
 import Layout from './components/Layout'
+import ErrorBoundary from './components/ErrorBoundary'
 import DashboardPage from './pages/DashboardPage'
 import PaymentsPage from './pages/PaymentsPage'
 import RefundsPage from './pages/RefundsPage'
@@ -10,15 +11,17 @@ export default function App() {
   return (
     <MerchantProvider>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="payments" element={<PaymentsPage />} />
-            <Route path="refunds" element={<RefundsPage />} />
-            <Route path="customers" element={<CustomersPage />} />
-          </Route>
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="payments" element={<PaymentsPage />} />
+              <Route path="refunds" element={<RefundsPage />} />
+              <Route path="customers" element={<CustomersPage />} />
+            </Route>
+          </Routes>
+        </ErrorBoundary>
       </BrowserRouter>
     </MerchantProvider>
   )
