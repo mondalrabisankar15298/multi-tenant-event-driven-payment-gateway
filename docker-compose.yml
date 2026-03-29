@@ -132,6 +132,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
     networks:
       - payment-platform
     healthcheck:
@@ -162,6 +164,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
     networks:
       - payment-platform
     restart: unless-stopped
@@ -193,6 +197,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
     networks:
       - payment-platform
     healthcheck:
@@ -223,6 +229,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      topic-init:
+        condition: service_completed_successfully
     networks:
       - payment-platform
     restart: unless-stopped
