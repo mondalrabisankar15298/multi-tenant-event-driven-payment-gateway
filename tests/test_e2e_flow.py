@@ -85,7 +85,7 @@ async def test_end_to_end_payment_flow():
             "reason": "Partial E2E Refund"
         }, headers=headers)
         assert res.status_code == 201, f"Failed to create refund: {res.text}"
-        refund = res.json()
+        res.json() # Verify response can be parsed as JSON
         
         # 8. Check events API for pagination and functionality
         res = await client.get(f"{CORE_URL}/api/events?limit=5")

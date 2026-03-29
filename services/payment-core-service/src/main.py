@@ -3,11 +3,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.requests import Request
-import logging
 
 from .database import get_pool, close_pool
 from .routers import merchants, customers, payments, refunds
 from .utils.logger import setup_logging, get_logger
+from .config import settings
 from prometheus_client import make_asgi_app
 
 setup_logging()
@@ -37,8 +37,6 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={"detail": "Internal server error"}
     )
-
-from .config import settings
 
 # CORS
 app.add_middleware(

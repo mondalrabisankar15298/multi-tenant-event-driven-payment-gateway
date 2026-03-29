@@ -1,5 +1,4 @@
 import json
-import logging
 import asyncio
 import uuid
 from aiokafka import AIOKafkaConsumer

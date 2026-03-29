@@ -1,4 +1,4 @@
-from fastapi import Request, HTTPException, Depends
+from fastapi import Request, HTTPException
 from ..services.merchant_service import get_merchant
 
 async def verify_merchant_access(request: Request, merchant_id: int):

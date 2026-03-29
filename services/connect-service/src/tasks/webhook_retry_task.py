@@ -2,7 +2,6 @@ import hmac
 import hashlib
 import json
 import logging
-import httpx
 import psycopg2
 import psycopg2.extras
 from ..celery_app import celery

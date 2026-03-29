@@ -12,19 +12,49 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install ruff pytest pytest-asyncio httpx uuid6
+
+    - name: Run Linting (Ruff)
+      run: ruff check .
+    
     - name: Create .env file
       run: cp .env.example .env
       
     - name: Set up Docker Compose
       run: docker compose up -d
       
-    - name: Wait for services
-      run: sleep 45
+    - name: Wait for services to be healthy
+      run: |
+        echo "Waiting for all services to be healthy..."
+        for i in {1..20}; do
+          if docker compose ps --format json | jq -e '.[] | select(.Health != "healthy")' > /dev/null; then
+            echo "Still waiting for services..."
+            sleep 5
+          else
+            echo "All services are healthy!"
+            exit 0
+          fi
+        done
+        echo "Error: Services did not become healthy in time."
+        docker compose ps
+        exit 1
       
     - name: Run All Tests
-      run: |
-        pip install pytest pytest-asyncio httpx uuid6
-        pytest tests/
+      run: pytest tests/
         
+    - name: Print Container Logs on Failure
+      if: failure()
+      run: docker compose logs
+      
     - name: Tear down
+      if: always()
       run: docker compose down

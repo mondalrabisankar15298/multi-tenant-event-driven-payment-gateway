@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional, Literal
-from datetime import date, datetime
+from datetime import datetime
 from uuid import UUID
 from decimal import Decimal
 from pydantic import condecimal

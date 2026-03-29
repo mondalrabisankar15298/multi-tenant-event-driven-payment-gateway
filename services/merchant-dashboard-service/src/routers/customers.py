@@ -1,8 +1,7 @@
 
-from typing import List
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter
 from ..database import get_pool, get_merchant_schema
 
 router = APIRouter(prefix="/api/{merchant_id}/customers", tags=["customers"])

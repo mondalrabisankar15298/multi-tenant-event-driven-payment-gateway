@@ -1,8 +1,7 @@
-import json
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
 from ..database import get_pool, get_merchant_schema
 
 router = APIRouter(prefix="/api/{merchant_id}/payments", tags=["payments"])

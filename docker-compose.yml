@@ -134,6 +134,12 @@ services:
         condition: service_healthy
     networks:
       - payment-platform
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
     deploy:
       resources:
@@ -189,6 +195,12 @@ services:
         condition: service_healthy
     networks:
       - payment-platform
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
     deploy:
       resources:
@@ -236,6 +248,12 @@ services:
         condition: service_healthy
     networks:
       - payment-platform
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
     deploy:
       resources:

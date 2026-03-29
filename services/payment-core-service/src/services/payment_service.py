@@ -1,4 +1,3 @@
-import json
 from datetime import datetime, timezone
 from ..database import get_pool
 from .merchant_service import get_merchant_schema
@@ -183,7 +182,7 @@ async def update_payment(merchant_id: int, payment_id: str, description: str = N
             # Build external response
             updated = dict(updated_row)
             updated["customer_id"] = str(cust["customer_id"]) if cust else None
-            internal_id = updated.pop("id")
+            updated.pop("id")
             updated.pop("customer_ref", None)
 
             await emit_event(
