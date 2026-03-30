@@ -63,7 +63,9 @@ We are building a **multi-tenant B2B payment gateway platform** — similar in c
 | Read Database | **PostgreSQL 16** | Same engine, different data model (transformed) |
 | Event Broker | **Redpanda** | Kafka-compatible, no Zookeeper, lightweight for local dev |
 | Broker UI | **Redpanda Console** | Visual topic/consumer inspection |
-| Containerization | **Docker Compose** | Orchestrates all 11 services |
+| Platform Monitor | **FastAPI + APScheduler** | real-time health checks + automated E2E smoke tests |
+| Monitor Storage | **Redis** | Persistent monitoring history (last 50 runs) |
+| Containerization | **Docker Compose** | Orchestrates all 14 services |
 | HTTP Client (webhooks) | **httpx** | Async HTTP for webhook dispatch |
 
 ---
@@ -162,6 +164,15 @@ multi-tenant-payment-gateway/
 │   └── test_smoke.py
 │
 ├── services/
+│   ├── platform-monitor/           # SYSTEM 4 — Centralized health & E2E dashboard
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── src/
+│   │       ├── main.py             # FastAPI entry + jobs + /api/status /api/history
+│   │       ├── checker.py          # Health check logic + E2E lifecycle + Poll loop
+│   │       └── static/
+│   │           └── index.html      # Real-time dashboard + History modal
+│   │
 │   ├── payment-core-service/       # SYSTEM 1 — Write API + Outbox
 │   │   ├── Dockerfile
 │   │   ├── requirements.txt
@@ -303,6 +314,7 @@ multi-tenant-payment-gateway/
 | 11 | `merchant-dashboard-service` | build: ./services/merchant-dashboard-service | 8003 | System 3 Read API |
 | 12 | `admin-portal` | build: ./frontends/admin-portal | 5173 | System 1 UI |
 | 13 | `merchant-dashboard` | build: ./frontends/merchant-dashboard | 5174 | System 3 UI |
+| 14 | `platform-monitor` | build: ./services/platform-monitor | 8888 | Centralized Health Dashboard |
 
 **Key Docker Compose features:**
 - All backend services have `healthcheck` (HTTP GET `/health`), `restart: unless-stopped`, and `deploy.resources.limits`
@@ -1238,6 +1250,9 @@ User Action                  System 1 (Write)              Kafka           Syste
 - [ ] `GET /metrics` on port 8001 returns Prometheus metrics
 - [ ] `pytest tests/` passes — E2E payment lifecycle green
 - [ ] React error boundary renders fallback on JS crash (not white screen)
+- [ ] `platform-monitor` dashboard (port 8888) is healthy and historical logs show dots
+- [ ] Manual E2E run in monitor dashboard creates and cleans up merchant on both DBs
+- [ ] `docker compose restart platform-monitor` — history persists (verified via Redis)
 
 ---
 
@@ -1272,9 +1287,34 @@ Used by Docker Compose healthchecks and the CI pipeline wait loop.
 
 System 1 (`payment-core-service`) exposes `GET /metrics` via `prometheus_client.make_asgi_app()`. Collect request counts, latency histograms, and error rates.
 
-### Structured Logging
+### Centralized Health Dashboard
 
-All services use `utils/logger.py` (`setup_logging()` / `get_logger()`) for JSON-structured log output. System 1 has a **global FastAPI exception handler** that logs unhandled errors at ERROR level before returning `500`.
+The **Platform Monitor** service (port 8888) provides a unified view of the system's runtime health. It aggregates 5-minute health check results, performance latencies, and 1-hour automated E2E smoke tests into a single interactive dashboard with persistent historical logs.
+
+---
+
+## 26. Platform Health & Monitoring
+
+To ensure production-grade reliability, the system includes a dedicated monitoring layer that proactively verifies the entire lifecycle.
+
+### 🏛 Persistence Mechanism (Redis)
+The monitor does not store state in memory. All check results are serialized to JSON and pushed to a **Redis list** (`monitor:history`).
+- **History Depth**: Last 50 runs.
+- **Log Detail**: Storing full snapshots allows the dashboard to "View Log" for any historical run by clicking on its timeline dot.
+
+### 🧪 Automated E2E Smoke Test
+Every 1 hour, the monitor triggers a full payment journey:
+1. `POST /api/merchants` → Create merchant + DB schemas.
+2. `POST /api/{mid}/customers` → Create customer.
+3. `POST /api/{mid}/payments` → Create `pending` payment.
+4. `POST /api/{mid}/payments/{id}/authorize` → Authorize.
+5. `POST /api/{mid}/payments/{id}/capture` → Capture.
+6. **Wait loop**: Poll `domain_events` for `published` status and `read-db` for record arrival.
+7. **Cleanup**: Automatically purges the test merchant from `core-db` and `read-db` to prevent database bloat.
+
+### 🔄 Monitoring Intervals
+- **System Health**: 5 minutes (checks connectivity to DBs, Redis, Kafka, and 7+ APIs).
+- **Smoke Tests**: 1 hour (verifies inter-service connectivity and event processing).
 
 ---
 
