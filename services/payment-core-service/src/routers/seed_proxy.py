@@ -800,6 +800,23 @@ async def _generate_seed_data(num_merchants: int = 20):
                 merchant["_config_name"] = name
                 merchants.append(merchant)
 
+            # If we still don't have enough merchants, create more with suffixed names
+            while len(merchants) < num_merchants:
+                base_name = MERCHANT_NAME_POOL[len(merchants) % len(MERCHANT_NAME_POOL)]
+                name = f"{base_name} {len(merchants)+1}"
+                email = f"contact-{len(merchants)+1}-{uuid.uuid4().hex[:6]}@{name.lower().replace(' ', '')}.com"
+                resp = await _retry_request(
+                    client.post, f"{BASE_URL}/api/merchants",
+                    json={"name": name, "email": email, "status": "active"},
+                )
+                if resp is None or resp.status_code not in (200, 201):
+                    raise HTTPException(status_code=500, detail=f"Failed to create merchant {name}")
+                merchant = resp.json()
+                merchant["_config_name"] = base_name  # Use base name for config lookup
+                merchants.append(merchant)
+                results["merchants_created"] += 1
+                existing_names.add(name)
+
         # ─── Step 2: Customers per merchant (skip if already enough) ───
         customers_by_merchant = {}
 
