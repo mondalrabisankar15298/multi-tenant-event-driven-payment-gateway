@@ -30,14 +30,22 @@ async def merchant_setup(client):
     })
     assert res.status_code == 201
     merchant = res.json()
-    merchant_id = merchant["merchant_id"]
-    schema_name = merchant["schema_name"]
+    merchant_uuid = merchant["merchant_uuid"]
+    
+    # Fetch schema_name and merchant_id from DB for cleanup (not exposed in public API)
+    conn_core = psycopg2.connect(CORE_DB_URL)
+    conn_core.autocommit = True
+    with conn_core.cursor() as cur:
+        cur.execute("SELECT merchant_id, schema_name FROM public.merchants WHERE merchant_uuid = %s;", (merchant_uuid,))
+        row = cur.fetchone()
+        merchant_id, schema_name = row
+    conn_core.close()
     
     # Yield the merchant data to the test
     yield merchant
     
     # --- CLEANUP (Mandatory) ---
-    print(f"\n[Cleanup] Removing merchant {merchant_id} and schema {schema_name}...")
+    print(f"\n[Cleanup] Removing merchant {merchant_uuid} and schema {schema_name}...")
     
     # 1. Clean Read DB
     try:
@@ -49,7 +57,7 @@ async def merchant_setup(client):
             cur.execute("DELETE FROM public.merchants WHERE merchant_id = %s;", (merchant_id,))
         conn_read.close()
     except Exception as e:
-        print(f"Warning: Read DB cleanup failed for merchant {merchant_id}: {e}")
+        print(f"Warning: Read DB cleanup failed for merchant {merchant_uuid}: {e}")
 
     # 2. Clean Core DB
     try:
@@ -61,4 +69,4 @@ async def merchant_setup(client):
             cur.execute("DELETE FROM public.merchants WHERE merchant_id = %s;", (merchant_id,))
         conn_core.close()
     except Exception as e:
-        print(f"Warning: Core DB cleanup failed for merchant {merchant_id}: {e}")
+        print(f"Warning: Core DB cleanup failed for merchant {merchant_uuid}: {e}")

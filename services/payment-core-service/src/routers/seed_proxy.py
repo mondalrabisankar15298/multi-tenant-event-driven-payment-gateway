@@ -760,31 +760,61 @@ async def _generate_seed_data(num_merchants: int = 20):
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         # ─── Step 1: Get existing merchants ────────────────────────────
+        # Fetch full merchant data from DB (includes api_key, needed for seeding)
+        from ..database import get_pool
+        from ..services.merchant_service import get_merchant_by_uuid
+
         existing_resp = await _retry_request(client.get, f"{BASE_URL}/api/merchants")
-        existing_merchants = existing_resp.json().get("data", []) if existing_resp else []
-        existing_names = {m["name"] for m in existing_merchants}
+        existing_merchants_public = existing_resp.json().get("data", []) if existing_resp else []
+        existing_names = {m["name"] for m in existing_merchants_public}
+
+        # Fetch api_keys from DB (not exposed in public API)
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT merchant_uuid, api_key FROM public.merchants"
+            )
+            api_key_map = {str(row["merchant_uuid"]): str(row["api_key"]) for row in rows}
+
+        # Enrich merchant data with api_key
+        existing_merchants = []
+        for m in existing_merchants_public:
+            m_copy = dict(m)
+            m_copy["api_key"] = api_key_map.get(m["merchant_uuid"])
+            existing_merchants.append(m_copy)
 
         # If we already have enough merchants, skip creation entirely
         if len(existing_merchants) >= MIN_MERCHANTS:
             merchants = []
+            seen_names = set()
             for m in existing_merchants:
-                # Only use merchants that are in our known pool
-                if m["name"] in MERCHANT_NAME_POOL:
+                # Only use merchants that are in our known pool, one per name
+                if m["name"] in MERCHANT_NAME_POOL and m["name"] not in seen_names:
                     m["_config_name"] = m["name"]
                     merchants.append(m)
-            # If pool merchants < MIN_MERCHANTS, use all existing
+                    seen_names.add(m["name"])
+            # If pool merchants < MIN_MERCHANTS, use all existing (deduplicated)
             if len(merchants) < MIN_MERCHANTS:
-                merchants = existing_merchants[:num_merchants]
-                for m in merchants:
-                    m["_config_name"] = m["name"]
+                merchants = []
+                seen_names = set()
+                for m in existing_merchants:
+                    if m["name"] not in seen_names:
+                        m["_config_name"] = m["name"]
+                        merchants.append(m)
+                        seen_names.add(m["name"])
+                merchants = merchants[:num_merchants]
             results["skipped_merchants"] = len(merchants)
         else:
             merchants = []
             for i in range(num_merchants):
                 name = MERCHANT_NAME_POOL[i % len(MERCHANT_NAME_POOL)]
                 if name in existing_names:
+                    # Reuse existing merchant
                     merchant = next(m for m in existing_merchants if m["name"] == name)
+                    merchant["_config_name"] = name
+                    merchants.append(merchant)
                 else:
+                    # Create new merchant
                     email = f"contact-{i+1}-{uuid.uuid4().hex[:6]}@{name.lower().replace(' ', '')}.com"
                     resp = await _retry_request(
                         client.post, f"{BASE_URL}/api/merchants",
@@ -793,17 +823,28 @@ async def _generate_seed_data(num_merchants: int = 20):
                     if resp is None or resp.status_code not in (200, 201):
                         raise HTTPException(status_code=500, detail=f"Failed to create merchant {name}")
                     merchant = resp.json()
+                    # Fetch api_key from DB (not exposed in public API response)
+                    async with pool.acquire() as conn:
+                        row = await conn.fetchrow(
+                            "SELECT api_key FROM public.merchants WHERE merchant_uuid = $1",
+                            merchant["merchant_uuid"]
+                        )
+                        if row:
+                            merchant["api_key"] = str(row["api_key"])
+                    merchant["_config_name"] = name
+                    merchants.append(merchant)
                     results["merchants_created"] += 1
-                    existing_merchants.append(merchant)
                     existing_names.add(name)
-
-                merchant["_config_name"] = name
-                merchants.append(merchant)
 
             # If we still don't have enough merchants, create more with suffixed names
             while len(merchants) < num_merchants:
                 base_name = MERCHANT_NAME_POOL[len(merchants) % len(MERCHANT_NAME_POOL)]
-                name = f"{base_name} {len(merchants)+1}"
+                suffix = 1
+                while True:
+                    name = f"{base_name} {suffix}"
+                    if name not in existing_names:
+                        break
+                    suffix += 1
                 email = f"contact-{len(merchants)+1}-{uuid.uuid4().hex[:6]}@{name.lower().replace(' ', '')}.com"
                 resp = await _retry_request(
                     client.post, f"{BASE_URL}/api/merchants",
@@ -812,7 +853,15 @@ async def _generate_seed_data(num_merchants: int = 20):
                 if resp is None or resp.status_code not in (200, 201):
                     raise HTTPException(status_code=500, detail=f"Failed to create merchant {name}")
                 merchant = resp.json()
-                merchant["_config_name"] = base_name  # Use base name for config lookup
+                # Fetch api_key from DB (not exposed in public API response)
+                async with pool.acquire() as conn:
+                    row = await conn.fetchrow(
+                        "SELECT api_key FROM public.merchants WHERE merchant_uuid = $1",
+                        merchant["merchant_uuid"]
+                    )
+                    if row:
+                        merchant["api_key"] = str(row["api_key"])
+                merchant["_config_name"] = base_name
                 merchants.append(merchant)
                 results["merchants_created"] += 1
                 existing_names.add(name)
@@ -823,7 +872,7 @@ async def _generate_seed_data(num_merchants: int = 20):
         async def _create_customer(m, first, last, email, phone):
             async with semaphore:
                 resp = await _retry_request(
-                    client.post, f"{BASE_URL}/api/{m['merchant_id']}/customers",
+                    client.post, f"{BASE_URL}/api/{m['merchant_uuid']}/customers",
                     json={"name": f"{first} {last}", "email": email, "phone": phone},
                     headers={"X-API-Key": m["api_key"]},
                 )
@@ -835,11 +884,11 @@ async def _generate_seed_data(num_merchants: int = 20):
         for m in merchants:
             if _check_timeout():
                 break
-            mid = m["merchant_id"]
+            muid = m["merchant_uuid"]
 
             # Check existing customer count
             cust_resp = await _retry_request(
-                client.get, f"{BASE_URL}/api/{mid}/customers",
+                client.get, f"{BASE_URL}/api/{muid}/customers",
                 headers={"X-API-Key": m["api_key"]},
             )
             existing_cust_count = 0
@@ -853,7 +902,7 @@ async def _generate_seed_data(num_merchants: int = 20):
                     existing_cust_count = len(cust_data)
                     existing_custs = cust_data
 
-            customers_by_merchant[mid] = existing_custs
+            customers_by_merchant[muid] = existing_custs
 
             if existing_cust_count >= MIN_CUSTOMERS_PER_MERCHANT:
                 results["skipped_customers"] += existing_cust_count
@@ -878,7 +927,7 @@ async def _generate_seed_data(num_merchants: int = 20):
             created = await asyncio.gather(*tasks)
             for cust in created:
                 if cust:
-                    customers_by_merchant[mid].append(cust)
+                    customers_by_merchant[muid].append(cust)
                     results["customers_created"] += 1
 
         # ─── Step 3: Payments per merchant (skip if already enough) ────
@@ -894,7 +943,7 @@ async def _generate_seed_data(num_merchants: int = 20):
                 metadata = _generate_payment_metadata(m["_config_name"], method)
 
                 resp = await _retry_request(
-                    client.post, f"{BASE_URL}/api/{m['merchant_id']}/payments",
+                    client.post, f"{BASE_URL}/api/{m['merchant_uuid']}/payments",
                     json={
                         "customer_id": cust["customer_id"], "amount": amount,
                         "currency": currency, "method": method,
@@ -910,14 +959,14 @@ async def _generate_seed_data(num_merchants: int = 20):
         for m in merchants:
             if _check_timeout():
                 break
-            mid = m["merchant_id"]
-            customers = customers_by_merchant[mid]
+            muid = m["merchant_uuid"]
+            customers = customers_by_merchant[muid]
             if not customers:
                 continue
 
             # Check existing payment count
             pay_resp = await _retry_request(
-                client.get, f"{BASE_URL}/api/{mid}/payments",
+                client.get, f"{BASE_URL}/api/{muid}/payments",
                 headers={"X-API-Key": m["api_key"]},
             )
             existing_pay_count = 0
@@ -933,9 +982,9 @@ async def _generate_seed_data(num_merchants: int = 20):
                 results["skipped_payments"] += existing_pay_count
                 # Still need payment records for processing/refunds — fetch a sample
                 if pay_data and isinstance(pay_data, dict):
-                    payments_by_merchant[mid] = pay_data.get("data", [])[:50]
+                    payments_by_merchant[muid] = pay_data.get("data", [])[:50]
                 elif pay_data and isinstance(pay_data, list):
-                    payments_by_merchant[mid] = pay_data[:50]
+                    payments_by_merchant[muid] = pay_data[:50]
                 continue
 
             need = random.randint(200, 500)
@@ -945,10 +994,10 @@ async def _generate_seed_data(num_merchants: int = 20):
                 tasks.append(_create_payment(m, cust))
 
             created = await asyncio.gather(*tasks)
-            payments_by_merchant[mid] = []
+            payments_by_merchant[muid] = []
             for pay in created:
                 if pay:
-                    payments_by_merchant[mid].append(pay)
+                    payments_by_merchant[muid].append(pay)
                     results["payments_created"] += 1
 
         # ─── Step 4: Process payments (authorize/capture/settle/fail) ──
@@ -959,49 +1008,49 @@ async def _generate_seed_data(num_merchants: int = 20):
             async with semaphore:
                 roll = random.random()
                 pid = payment["payment_id"]
-                mid = m["merchant_id"]
+                muid = m["merchant_uuid"]
                 api_key = m["api_key"]
                 status_result = None
 
                 if roll < 0.15:
                     resp = await _retry_request(
-                        client.post, f"{BASE_URL}/api/{mid}/payments/{pid}/fail",
+                        client.post, f"{BASE_URL}/api/{muid}/payments/{pid}/fail",
                         headers={"X-API-Key": api_key},
                     )
                     if resp and resp.status_code in (200, 201):
                         status_result = "failed"
                 elif roll < 0.25:
                     resp = await _retry_request(
-                        client.post, f"{BASE_URL}/api/{mid}/payments/{pid}/authorize",
+                        client.post, f"{BASE_URL}/api/{muid}/payments/{pid}/authorize",
                         headers={"X-API-Key": api_key},
                     )
                     if resp and resp.status_code in (200, 201):
                         status_result = "authorized"
                 elif roll < 0.40:
                     r1 = await _retry_request(
-                        client.post, f"{BASE_URL}/api/{mid}/payments/{pid}/authorize",
+                        client.post, f"{BASE_URL}/api/{muid}/payments/{pid}/authorize",
                         headers={"X-API-Key": api_key},
                     )
                     if r1 and r1.status_code in (200, 201):
                         r2 = await _retry_request(
-                            client.post, f"{BASE_URL}/api/{mid}/payments/{pid}/capture",
+                            client.post, f"{BASE_URL}/api/{muid}/payments/{pid}/capture",
                             headers={"X-API-Key": api_key},
                         )
                         if r2 and r2.status_code in (200, 201):
                             status_result = "captured"
                 else:
                     r1 = await _retry_request(
-                        client.post, f"{BASE_URL}/api/{mid}/payments/{pid}/authorize",
+                        client.post, f"{BASE_URL}/api/{muid}/payments/{pid}/authorize",
                         headers={"X-API-Key": api_key},
                     )
                     if r1 and r1.status_code in (200, 201):
                         r2 = await _retry_request(
-                            client.post, f"{BASE_URL}/api/{mid}/payments/{pid}/capture",
+                            client.post, f"{BASE_URL}/api/{muid}/payments/{pid}/capture",
                             headers={"X-API-Key": api_key},
                         )
                         if r2 and r2.status_code in (200, 201):
                             r3 = await _retry_request(
-                                client.post, f"{BASE_URL}/api/{mid}/payments/{pid}/settle",
+                                client.post, f"{BASE_URL}/api/{muid}/payments/{pid}/settle",
                                 headers={"X-API-Key": api_key},
                             )
                             if r3 and r3.status_code in (200, 201):
@@ -1013,8 +1062,8 @@ async def _generate_seed_data(num_merchants: int = 20):
         for m in merchants:
             if _check_timeout():
                 break
-            mid = m["merchant_id"]
-            for payment in payments_by_merchant.get(mid, []):
+            muid = m["merchant_uuid"]
+            for payment in payments_by_merchant.get(muid, []):
                 tasks.append(_process_payment(m, payment))
 
         if tasks:
@@ -1051,7 +1100,7 @@ async def _generate_seed_data(num_merchants: int = 20):
                     reason = _generate_refund_reason(m["_config_name"])
                     resp = await _retry_request(
                         client.post,
-                        f"{BASE_URL}/api/{m['merchant_id']}/payments/{payment['payment_id']}/refund",
+                        f"{BASE_URL}/api/{m['merchant_uuid']}/payments/{payment['payment_id']}/refund",
                         json={"amount": refund_amount, "reason": reason},
                         headers={"X-API-Key": m["api_key"]},
                     )
@@ -1065,7 +1114,7 @@ async def _generate_seed_data(num_merchants: int = 20):
                         if random.random() < 0.7:
                             await _retry_request(
                                 client.post,
-                                f"{BASE_URL}/api/{m['merchant_id']}/refunds/{refund['refund_id']}/process",
+                                f"{BASE_URL}/api/{m['merchant_uuid']}/refunds/{refund['refund_id']}/process",
                                 headers={"X-API-Key": m["api_key"]},
                             )
                             results["refunds_processed"] += 1

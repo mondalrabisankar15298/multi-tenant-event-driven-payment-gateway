@@ -11,7 +11,7 @@ export default function RefundsPage() {
   const [limit, setLimit] = useState(25)
   const [viewingRefund, setViewingRefund] = useState(null)
   const [toast, setToast] = useState(null)
-  const mid = selectedMerchant?.merchant_id
+  const muid = selectedMerchant?.merchant_uuid
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
@@ -19,8 +19,8 @@ export default function RefundsPage() {
   }
 
   useEffect(() => {
-    if (mid) fetchRefunds()
-  }, [mid, page, limit])
+    if (muid) fetchRefunds()
+  }, [muid, page, limit])
 
   useEffect(() => {
     const handleKeyDown = (e) => { if (e.key === 'Escape') setViewingRefund(null) }
@@ -30,7 +30,7 @@ export default function RefundsPage() {
 
   const fetchRefunds = async () => {
     try {
-      const data = await api.getRefunds(mid, { page, limit })
+      const data = await api.getRefunds(muid, { page, limit })
       setRefunds(data.data)
       setTotalItems(data.total)
     } catch (err) {
@@ -45,7 +45,7 @@ export default function RefundsPage() {
 
   const handleProcess = async (refundId) => {
     try {
-      await api.processRefund(mid, refundId)
+      await api.processRefund(muid, refundId)
       await fetchRefunds()
       showToast('Refund processed!')
     } catch (err) {
@@ -53,7 +53,7 @@ export default function RefundsPage() {
     }
   }
 
-  if (!mid) return <div className="empty-state"><h3>Select a merchant to view refunds</h3></div>
+  if (!muid) return <div className="empty-state"><h3>Select a merchant to view refunds</h3></div>
 
   const columns = [
     { 

@@ -1,0 +1,597 @@
+{
+  "info": {
+    "_postman_id": "b2c3d4e5-f6a7-8901-bcde-fa2345678901",
+    "name": "Payment Gateway \u2014 Third-Party Bulk API",
+    "description": "Third-party data access API for the Multi-Tenant Payment Gateway.\n\n## Authentication\nThis collection uses **OAuth 2.0 Client Credentials Flow** (RFC 6749).\n\n### Setup\n1. Set your `client_id` and `client_secret` in the **Variables** tab of this collection\n2. The collection automatically obtains and refreshes the access token\n3. All requests automatically include the `Authorization: Bearer <token>` header\n\n### Token Endpoint\n- **URL**: `{{base_url}}/api/v1/oauth/token`\n- **Method**: POST\n- **Grant Type**: `client_credentials`\n\n### Required Headers on Data Endpoints\n- `Authorization: Bearer <access_token>` (auto-managed by collection auth)\n- `X-Merchant-UUID: <merchant_uuid_string>` (set per-request or via variable)\n\n### Pagination\nAll list endpoints use **cursor-based pagination**:\n- Use `cursor` query param (returned as `next_cursor` in response)\n- `limit`: 1\u2013500 (default 100)\n- `include_count: true` to get total count (slower)\n\n### Rate Limiting\nResponses include rate limit headers:\n- `X-RateLimit-Limit`: Max requests per window\n- `X-RateLimit-Remaining`: Remaining requests\n- `X-RateLimit-Reset`: Window reset timestamp",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "oauth2",
+    "oauth2": [
+      {
+        "key": "grant_type",
+        "value": "client_credentials",
+        "type": "string"
+      },
+      {
+        "key": "accessTokenUrl",
+        "value": "{{base_url}}/api/v1/oauth/token",
+        "type": "string"
+      },
+      {
+        "key": "clientSecret",
+        "value": "{{client_secret}}",
+        "type": "string"
+      },
+      {
+        "key": "clientId",
+        "value": "{{client_id}}",
+        "type": "string"
+      },
+      {
+        "key": "scope",
+        "value": "payments:read customers:read refunds:read events:read merchants:read",
+        "type": "string"
+      },
+      {
+        "key": "clientAuthentication",
+        "value": "body",
+        "type": "string"
+      },
+      {
+        "key": "tokenName",
+        "value": "Bulk API Access Token",
+        "type": "string"
+      },
+      {
+        "key": "addTokenTo",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8002",
+      "type": "string",
+      "description": "Connect Service base URL (System 2)"
+    },
+    {
+      "key": "client_id",
+      "value": "your-client-id-here",
+      "type": "string",
+      "description": "OAuth 2.0 Client ID \u2014 provided when your third-party app was registered"
+    },
+    {
+      "key": "client_secret",
+      "value": "your-client-secret-here",
+      "type": "string",
+      "description": "OAuth 2.0 Client Secret \u2014 provided when your third-party app was registered. Keep this confidential."
+    },
+    {
+      "key": "merchant_uuid",
+      "value": "00000000-0000-0000-0000-000000000000",
+      "type": "string",
+      "description": "Merchant UUID string. Set via X-Merchant-UUID header on data endpoints. Obtain from the /merchants endpoint after authenticating."
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Get Access Token (OAuth 2.0)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials",
+                  "type": "text"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{client_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "client_secret",
+                  "value": "{{client_secret}}",
+                  "type": "text"
+                },
+                {
+                  "key": "scope",
+                  "value": "payments:read customers:read refunds:read events:read merchants:read",
+                  "type": "text",
+                  "description": "Space-separated scopes. Must be a subset of scopes assigned to your consumer."
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/oauth/token",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "oauth",
+                "token"
+              ]
+            },
+            "description": "Obtain an OAuth 2.0 access token using the Client Credentials flow.\n\n**Request:**\n- `grant_type`: Must be `client_credentials`\n- `client_id`: Your registered client ID\n- `client_secret`: Your registered client secret\n- `scope` (optional): Space-separated list of scopes. Must be a subset of scopes assigned to your consumer.\n\n**Response:**\n```json\n{\n  \"access_token\": \"eyJ...\",\n  \"token_type\": \"bearer\",\n  \"expires_in\": 3600,\n  \"scope\": \"payments:read customers:read refunds:read events:read merchants:read\"\n}\n```\n\n**Note:** This collection is configured to auto-manage tokens. You typically don't need to call this manually \u2014 Postman will automatically obtain and refresh the token."
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"token_type\": \"bearer\",\n  \"expires_in\": 3600,\n  \"scope\": \"payments:read customers:read refunds:read events:read merchants:read\"\n}"
+            },
+            {
+              "name": "Invalid Credentials",
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"invalid_client\",\n  \"message\": \"Invalid client_id or client_secret\"\n}"
+            },
+            {
+              "name": "Consumer Suspended",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"access_denied\",\n  \"message\": \"Consumer is suspended\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Merchants",
+      "item": [
+        {
+          "name": "List Assigned Merchants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/merchants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "merchants"
+              ]
+            },
+            "description": "List all merchants assigned to this consumer. Use this to discover which merchant IDs you can query.\n\n**Required Scope:** `merchants:read`\n\n**Response:**\n```json\n{\n  \"data\": [\n    {\n      \"merchant_id\": 1,\n      \"name\": \"Acme Corp\",\n      \"status\": \"active\"\n    }\n  ]\n}\n```"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"merchant_id\": 1,\n      \"name\": \"Acme Corp\",\n      \"status\": \"active\"\n    },\n    {\n      \"merchant_id\": 2,\n      \"name\": \"Beta Inc\",\n      \"status\": \"active\"\n    }\n  ]\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "List Payments",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Merchant-UUID",
+                "value": "{{merchant_uuid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/payments?limit=100",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "description": "Opaque cursor for pagination. Use the next_cursor from the previous response.",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Number of records (1\u2013500, default 100)"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Filter: created | authorized | captured | failed | settled | refunded",
+                  "disabled": true
+                },
+                {
+                  "key": "method",
+                  "value": "",
+                  "description": "Filter: card | upi | netbanking | wallet",
+                  "disabled": true
+                },
+                {
+                  "key": "created_gte",
+                  "value": "",
+                  "description": "Filter: payments created >= this ISO 8601 datetime",
+                  "disabled": true
+                },
+                {
+                  "key": "created_lte",
+                  "value": "",
+                  "description": "Filter: payments created <= this ISO 8601 datetime",
+                  "disabled": true
+                },
+                {
+                  "key": "updated_since",
+                  "value": "",
+                  "description": "Filter: payments updated >= this ISO 8601 datetime",
+                  "disabled": true
+                },
+                {
+                  "key": "include_count",
+                  "value": "false",
+                  "description": "Include total count in response (slower for large datasets)"
+                }
+              ]
+            },
+            "description": "List payments with cursor-based pagination. Reads from Core DB Replica.\n\n**Required Scope:** `payments:read`\n**Required Header:** `X-Merchant-UUID`\n\n**Query Parameters:**\n- `cursor`: Opaque pagination cursor from previous response\n- `limit`: 1\u2013500 (default 100)\n- `status`: Filter by payment status\n- `method`: Filter by payment method\n- `created_gte`/`created_lte`: Filter by creation date range (ISO 8601)\n- `updated_since`: Filter by last update time (ISO 8601)\n- `include_count`: Include total count (default false, slower)\n\n**Response:**\n```json\n{\n  \"data\": [...],\n  \"next_cursor\": \"eyJpZCI6MTIzfQ==\",\n  \"has_more\": true,\n  \"total_count\": 5000\n}\n```"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "key": "X-RateLimit-Limit",
+                  "value": "1000"
+                },
+                {
+                  "key": "X-RateLimit-Remaining",
+                  "value": "999"
+                },
+                {
+                  "key": "X-RateLimit-Reset",
+                  "value": "1712345678"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"payment_id\": \"550e8400-e29b-41d4-a716-446655440002\",\n      \"customer_id\": \"550e8400-e29b-41d4-a716-446655440001\",\n      \"amount\": \"999.99\",\n      \"currency\": \"INR\",\n      \"status\": \"captured\",\n      \"method\": \"upi\",\n      \"description\": \"Order #12345\",\n      \"created_at\": \"2026-04-05T10:00:00Z\",\n      \"updated_at\": \"2026-04-05T10:01:00Z\"\n    }\n  ],\n  \"next_cursor\": \"eyJpZCI6MTIzfQ==\",\n  \"has_more\": true\n}"
+            },
+            {
+              "name": "Rate Limited",
+              "status": "Too Many Requests",
+              "code": 429,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"rate_limit_exceeded\",\n  \"message\": \"Too many requests. Please retry after the specified time.\",\n  \"retry_after\": 60,\n  \"retry_after_ms\": 60000\n}"
+            },
+            {
+              "name": "Forbidden \u2014 Insufficient Scope",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"insufficient_scope\",\n  \"message\": \"Required scope: payments:read\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "List Customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Merchant-UUID",
+                "value": "{{merchant_uuid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/customers?limit=100",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "description": "Opaque cursor for pagination. Use the next_cursor from the previous response.",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Number of records (1\u2013500, default 100)"
+                },
+                {
+                  "key": "updated_since",
+                  "value": "",
+                  "description": "Filter: customers updated >= this ISO 8601 datetime",
+                  "disabled": true
+                },
+                {
+                  "key": "include_count",
+                  "value": "false",
+                  "description": "Include total count in response (slower for large datasets)"
+                }
+              ]
+            },
+            "description": "List customers with cursor-based pagination. Reads from Core DB Replica.\n\n**Required Scope:** `customers:read`\n**Required Header:** `X-Merchant-UUID`\n\n**Query Parameters:**\n- `cursor`: Opaque pagination cursor from previous response\n- `limit`: 1\u2013500 (default 100)\n- `updated_since`: Filter by last update time (ISO 8601)\n- `include_count`: Include total count (default false, slower)\n\n**Response:**\n```json\n{\n  \"data\": [...],\n  \"next_cursor\": \"eyJpZCI6MTIzfQ==\",\n  \"has_more\": true\n}\n```"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"customer_id\": \"550e8400-e29b-41d4-a716-446655440001\",\n      \"name\": \"Jane Doe\",\n      \"email\": \"jane.doe@example.com\",\n      \"phone\": \"+91-9876543210\",\n      \"total_payments\": 5,\n      \"total_spent\": \"4999.95\",\n      \"last_payment_at\": \"2026-04-05T10:00:00Z\",\n      \"created_at\": \"2026-03-01T10:00:00Z\",\n      \"updated_at\": \"2026-04-05T10:00:00Z\"\n    }\n  ],\n  \"next_cursor\": \"eyJpZCI6MTIzfQ==\",\n  \"has_more\": true\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Refunds",
+      "item": [
+        {
+          "name": "List Refunds",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Merchant-UUID",
+                "value": "{{merchant_uuid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/refunds?limit=100",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "refunds"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "description": "Opaque cursor for pagination. Use the next_cursor from the previous response.",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Number of records (1\u2013500, default 100)"
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Filter: pending | processed | failed",
+                  "disabled": true
+                },
+                {
+                  "key": "created_gte",
+                  "value": "",
+                  "description": "Filter: refunds created >= this ISO 8601 datetime",
+                  "disabled": true
+                },
+                {
+                  "key": "created_lte",
+                  "value": "",
+                  "description": "Filter: refunds created <= this ISO 8601 datetime",
+                  "disabled": true
+                },
+                {
+                  "key": "updated_since",
+                  "value": "",
+                  "description": "Filter: refunds updated >= this ISO 8601 datetime",
+                  "disabled": true
+                },
+                {
+                  "key": "include_count",
+                  "value": "false",
+                  "description": "Include total count in response (slower for large datasets)"
+                }
+              ]
+            },
+            "description": "List refunds with cursor-based pagination. Reads from Core DB Replica.\n\n**Required Scope:** `refunds:read`\n**Required Header:** `X-Merchant-UUID`\n\n**Query Parameters:**\n- `cursor`: Opaque pagination cursor from previous response\n- `limit`: 1\u2013500 (default 100)\n- `status`: Filter by refund status\n- `created_gte`/`created_lte`: Filter by creation date range (ISO 8601)\n- `updated_since`: Filter by last update time (ISO 8601)\n- `include_count`: Include total count (default false, slower)"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"refund_id\": \"550e8400-e29b-41d4-a716-446655440004\",\n      \"payment_id\": \"550e8400-e29b-41d4-a716-446655440003\",\n      \"amount\": \"250.00\",\n      \"reason\": \"Customer requested cancellation\",\n      \"status\": \"processed\",\n      \"created_at\": \"2026-04-05T10:00:00Z\",\n      \"updated_at\": \"2026-04-05T10:05:00Z\"\n    }\n  ],\n  \"next_cursor\": \"eyJpZCI6MTIzfQ==\",\n  \"has_more\": false\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "List Domain Events",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Merchant-UUID",
+                "value": "{{merchant_uuid}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/events?limit=100",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "",
+                  "description": "Opaque cursor for pagination. Use the next_cursor from the previous response.",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "description": "Number of records (1\u2013500, default 100)"
+                },
+                {
+                  "key": "event_type",
+                  "value": "",
+                  "description": "Filter: e.g., payment.captured, payment.failed, refund.processed",
+                  "disabled": true
+                },
+                {
+                  "key": "entity_type",
+                  "value": "",
+                  "description": "Filter: payment | refund | customer | merchant",
+                  "disabled": true
+                },
+                {
+                  "key": "created_gte",
+                  "value": "",
+                  "description": "Filter: events created >= this ISO 8601 datetime",
+                  "disabled": true
+                },
+                {
+                  "key": "created_lte",
+                  "value": "",
+                  "description": "Filter: events created <= this ISO 8601 datetime",
+                  "disabled": true
+                },
+                {
+                  "key": "include_count",
+                  "value": "false",
+                  "description": "Include total count in response (slower for large datasets)"
+                }
+              ]
+            },
+            "description": "List domain events with cursor-based pagination. Reads from Core DB Replica.\n\n**Required Scope:** `events:read`\n**Required Header:** `X-Merchant-UUID`\n\n**Query Parameters:**\n- `cursor`: Opaque pagination cursor from previous response\n- `limit`: 1\u2013500 (default 100)\n- `event_type`: Filter by specific event type string\n- `entity_type`: Filter by entity type (payment, refund, customer, merchant)\n- `created_gte`/`created_lte`: Filter by creation date range (ISO 8601)\n- `include_count`: Include total count (default false, slower)"
+          },
+          "response": [
+            {
+              "name": "Success",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"data\": [\n    {\n      \"event_id\": 1,\n      \"event_type\": \"payment.captured.v1\",\n      \"entity_type\": \"payment\",\n      \"entity_id\": \"550e8400-e29b-41d4-a716-446655440002\",\n      \"merchant_id\": 1,\n      \"payload\": {\"payment_id\": \"550e8400-e29b-41d4-a716-446655440002\", \"status\": \"captured\"},\n      \"status\": \"published\",\n      \"created_at\": \"2026-04-05T10:00:00Z\"\n    }\n  ],\n  \"next_cursor\": \"eyJpZCI6MTIzfQ==\",\n  \"has_more\": true\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

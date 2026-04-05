@@ -27,11 +27,13 @@ async def _sync_merchant_created(pool, schema, payload):
     async with pool.acquire() as conn:
         await conn.execute(
             """
-            INSERT INTO public.merchants (merchant_id, name, email, schema_name, status, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            ON CONFLICT (merchant_id) DO UPDATE SET name = $2, email = $3, status = $5, updated_at = $7
+            INSERT INTO public.merchants (merchant_id, merchant_uuid, name, email, schema_name, status, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            ON CONFLICT (merchant_id) DO UPDATE SET
+                merchant_uuid = EXCLUDED.merchant_uuid,
+                name = $3, email = $4, status = $6, updated_at = $8
             """,
-            payload.get("merchant_id"), payload.get("name"), payload.get("email"),
+            payload.get("merchant_id"), payload.get("merchant_uuid"), payload.get("name"), payload.get("email"),
             payload.get("schema_name"), payload.get("status", "active"),
             datetime.fromisoformat(str(payload.get("created_at"))) if payload.get("created_at") else datetime.now(timezone.utc),
             datetime.fromisoformat(str(payload.get("updated_at"))) if payload.get("updated_at") else datetime.now(timezone.utc),
@@ -43,11 +45,13 @@ async def _sync_merchant_updated(pool, schema, payload):
         await conn.execute(
             """
             UPDATE public.merchants
-            SET name = $1, email = $2, status = $3, updated_at = $4
-            WHERE merchant_id = $5
+            SET name = $1, email = $2, status = $3, updated_at = $4,
+                merchant_uuid = COALESCE($5, merchant_uuid)
+            WHERE merchant_id = $6
             """,
             payload.get("name"), payload.get("email"), payload.get("status"),
             datetime.fromisoformat(str(payload["updated_at"])) if payload.get("updated_at") else datetime.now(timezone.utc),
+            payload.get("merchant_uuid"),
             payload["merchant_id"]
         )
 

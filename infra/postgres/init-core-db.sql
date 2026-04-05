@@ -7,6 +7,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- Merchant registry
 CREATE TABLE public.merchants (
     merchant_id     SERIAL PRIMARY KEY,
+    merchant_uuid   UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
     name            VARCHAR(255) NOT NULL,
     email           VARCHAR(255) UNIQUE NOT NULL,
     schema_name     VARCHAR(100) UNIQUE NOT NULL,
@@ -15,6 +16,8 @@ CREATE TABLE public.merchants (
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX idx_merchants_uuid ON public.merchants(merchant_uuid);
 
 -- Transactional outbox (domain events)
 CREATE TABLE public.domain_events (

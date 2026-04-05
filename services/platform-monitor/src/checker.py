@@ -185,6 +185,7 @@ async def run_e2e_smoke() -> dict:
     start = time.time()
     steps: dict = {}
     merchant_id = None
+    merchant_uuid = None
     schema_name = None
 
     try:
@@ -200,14 +201,31 @@ async def run_e2e_smoke() -> dict:
                 return _build_e2e(steps, start, merchant_id, schema_name)
 
             m = r.json()
-            merchant_id = m["merchant_id"]
-            schema_name = m["schema_name"]
-            hdrs = {"X-API-Key": str(m["api_key"])}
+            merchant_uuid = m["merchant_uuid"]
+
+            # Fetch internal fields from DB (not exposed in public API)
+            conn = await asyncio.wait_for(asyncpg.connect(CORE_DB_DSN), timeout=DB_TIMEOUT)
+            try:
+                row = await conn.fetchrow(
+                    "SELECT merchant_id, schema_name, api_key FROM public.merchants WHERE merchant_uuid = $1",
+                    merchant_uuid
+                )
+                if row:
+                    merchant_id = row["merchant_id"]
+                    schema_name = row["schema_name"]
+                    api_key = str(row["api_key"])
+                else:
+                    steps["create_merchant"] = {"status": "error", "note": "Merchant not found in DB"}
+                    return _build_e2e(steps, start, merchant_id, schema_name)
+            finally:
+                await conn.close()
+
+            hdrs = {"X-API-Key": api_key}
             steps["create_merchant"] = _ok(merchant_id=merchant_id)
 
             # 2. Create customer
             r = await http.post(
-                f"{CORE_URL}/api/{merchant_id}/customers",
+                f"{CORE_URL}/api/{merchant_uuid}/customers",
                 json={"name": "Smoke Customer", "email": "s@m.internal"},
                 headers=hdrs,
             )
@@ -219,7 +237,7 @@ async def run_e2e_smoke() -> dict:
 
             # 3. Create payment
             r = await http.post(
-                f"{CORE_URL}/api/{merchant_id}/payments",
+                f"{CORE_URL}/api/{merchant_uuid}/payments",
                 json={"customer_id": customer_id, "amount": 1.00,
                       "currency": "INR", "method": "upi",
                       "description": "Smoke Test"},
@@ -233,17 +251,17 @@ async def run_e2e_smoke() -> dict:
 
             # 4. Authorize → Capture
             auth = await http.post(
-                f"{CORE_URL}/api/{merchant_id}/payments/{payment_id}/authorize", headers=hdrs)
+                f"{CORE_URL}/api/{merchant_uuid}/payments/{payment_id}/authorize", headers=hdrs)
             cap = await http.post(
-                f"{CORE_URL}/api/{merchant_id}/payments/{payment_id}/capture", headers=hdrs)
+                f"{CORE_URL}/api/{merchant_uuid}/payments/{payment_id}/capture", headers=hdrs)
             steps["payment_lifecycle"] = {
                 "status": "ok" if auth.status_code == 200 and cap.status_code == 200 else "error"
             }
 
-            # 5. Verify event published (poll 10s)
+            # 5. Verify event published (poll 24s)
             steps["event_published"] = await _poll_event(merchant_id)
 
-            # 6. Verify Read-DB synced (poll 10s)
+            # 6. Verify Read-DB synced (poll 15s)
             steps["read_db_synced"] = await _poll_read_db_sync(merchant_id)
 
     except Exception as e:

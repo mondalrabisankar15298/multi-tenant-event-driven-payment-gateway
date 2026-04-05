@@ -53,6 +53,7 @@ app.mount("/metrics", metrics_app)
 
 # Routers
 app.include_router(merchants.router)
+app.include_router(merchants.admin_router)
 app.include_router(customers.router)
 app.include_router(payments.router)
 app.include_router(refunds.router)

@@ -6,6 +6,7 @@ from fastapi import Request, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from ..services.oauth_service import validate_token, get_cached_consumer, check_merchant_access
+from ..services.bulk_service import resolve_merchant_uuid_to_id
 from ..config import settings
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ async def verify_third_party_access(
     1. Extract Bearer token
     2. Verify JWT signature + expiry
     3. Check consumer status (Redis-cached, Primary on miss)
-    4. If X-Merchant-ID present, verify merchant access
+    4. If X-Merchant-UUID or X-Merchant-ID present, verify merchant access
     5. Attach consumer info to request.state
     """
     if not credentials:
@@ -47,9 +48,24 @@ async def verify_third_party_access(
     if consumer.get("status") != "active":
         raise HTTPException(status_code=403, detail={"error": "forbidden", "message": f"Consumer is {consumer.get('status')}", "code": "CONSUMER_INACTIVE"})
 
-    # Check merchant access if X-Merchant-ID header present
+    # Check merchant access if X-Merchant-UUID or X-Merchant-ID header present
+    merchant_uuid_str = request.headers.get("X-Merchant-UUID")
     merchant_id_str = request.headers.get("X-Merchant-ID")
-    if merchant_id_str:
+
+    if merchant_uuid_str:
+        # Third party sends UUID — resolve to internal ID
+        merchant_id = await resolve_merchant_uuid_to_id(merchant_uuid_str)
+        if merchant_id is None:
+            raise HTTPException(status_code=400, detail={"error": "invalid_request", "message": f"Merchant UUID not found: {merchant_uuid_str}", "code": "MERCHANT_NOT_FOUND"})
+
+        has_access = await check_merchant_access(consumer_id, merchant_id)
+        if not has_access:
+            raise HTTPException(status_code=403, detail={"error": "forbidden", "message": f"Consumer does not have access to merchant {merchant_uuid_str}", "code": "ACCESS_DENIED"})
+
+        request.state.merchant_id = merchant_id
+        request.state.merchant_uuid = merchant_uuid_str
+    elif merchant_id_str:
+        # Legacy: internal int ID (for backward compatibility)
         try:
             merchant_id = int(merchant_id_str)
         except ValueError:

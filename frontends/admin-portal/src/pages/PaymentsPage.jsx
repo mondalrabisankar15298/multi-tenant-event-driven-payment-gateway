@@ -20,7 +20,7 @@ export default function PaymentsPage() {
   const [metadataString, setMetadataString] = useState('{}')
   const [toast, setToast] = useState(null)
 
-  const mid = selectedMerchant?.merchant_id
+  const muid = selectedMerchant?.merchant_uuid
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
@@ -28,8 +28,8 @@ export default function PaymentsPage() {
   }
 
   useEffect(() => {
-    if (mid) { fetchPayments(); fetchCustomers() }
-  }, [mid, page, limit])
+    if (muid) { fetchPayments(); fetchCustomers() }
+  }, [muid, page, limit])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -46,7 +46,7 @@ export default function PaymentsPage() {
 
   const fetchPayments = async () => {
     try {
-      const data = await api.getPayments(mid, { page, limit })
+      const data = await api.getPayments(muid, { page, limit })
       setPayments(data.data)
       setTotalItems(data.total)
     } catch (err) {
@@ -55,7 +55,7 @@ export default function PaymentsPage() {
   }
   const fetchCustomers = async () => {
     try {
-      const data = await api.getCustomers(mid, { limit: 1000 })
+      const data = await api.getCustomers(muid, { limit: 1000 })
       setCustomers(data.data || data)
     } catch (err) {
       showToast(`Failed to load customers: ${err.message}`, 'error')
@@ -70,7 +70,7 @@ export default function PaymentsPage() {
   const handleCreate = async (e) => {
     e.preventDefault()
     try {
-      await api.createPayment(mid, { ...form, amount: Number(form.amount) })
+      await api.createPayment(muid, { ...form, amount: Number(form.amount) })
       await fetchPayments()
       setShowForm(false)
       setForm({ customer_id: '', amount: '', method: 'card', description: '' })
@@ -93,7 +93,7 @@ export default function PaymentsPage() {
     catch { return alert("Invalid Metadata JSON") }
 
     try {
-      await api.updatePayment(mid, editingPayment.payment_id, {
+      await api.updatePayment(muid, editingPayment.payment_id, {
         description: description || null,
         metadata: parsedMeta
       })
@@ -107,9 +107,9 @@ export default function PaymentsPage() {
 
   const handleAction = async (action, paymentId) => {
     try {
-      if (action === 'authorize') await api.authorizePayment(mid, paymentId)
-      if (action === 'capture') await api.capturePayment(mid, paymentId)
-      if (action === 'fail') await api.failPayment(mid, paymentId)
+      if (action === 'authorize') await api.authorizePayment(muid, paymentId)
+      if (action === 'capture') await api.capturePayment(muid, paymentId)
+      if (action === 'fail') await api.failPayment(muid, paymentId)
       if (action === 'refund') {
         setRefundModal({ show: true, paymentId, amount: '', reason: 'Requested by Admin' })
         return
@@ -126,7 +126,7 @@ export default function PaymentsPage() {
     try {
       const amount = Number(refundModal.amount)
       if (isNaN(amount) || amount <= 0) return showToast('Invalid refund amount', 'error')
-      await api.createRefund(mid, refundModal.paymentId, { amount, reason: refundModal.reason })
+      await api.createRefund(muid, refundModal.paymentId, { amount, reason: refundModal.reason })
       await fetchPayments()
       setRefundModal({ show: false, paymentId: null, amount: '', reason: '' })
       showToast('Refund initiated successfully!')
@@ -135,7 +135,7 @@ export default function PaymentsPage() {
     }
   }
 
-  if (!mid) return <div className="empty-state"><h3>Select a merchant to manage payments</h3></div>
+  if (!muid) return <div className="empty-state"><h3>Select a merchant to manage payments</h3></div>
 
   const columns = [
     { 

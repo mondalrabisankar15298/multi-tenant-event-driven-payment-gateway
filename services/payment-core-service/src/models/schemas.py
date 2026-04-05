@@ -21,10 +21,19 @@ class MerchantUpdate(BaseModel):
 
 class MerchantResponse(BaseModel):
     merchant_id: int
+    merchant_uuid: UUID
     name: str
     email: str
     schema_name: str
     api_key: UUID
+    status: str
+    created_at: datetime
+
+
+class MerchantPublicResponse(BaseModel):
+    merchant_uuid: UUID
+    name: str
+    email: str
     status: str
     created_at: datetime
 

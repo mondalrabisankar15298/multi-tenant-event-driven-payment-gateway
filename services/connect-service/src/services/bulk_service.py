@@ -18,6 +18,34 @@ logger = logging.getLogger(__name__)
 _schema_cache: dict[int, tuple[str, float]] = {}
 _SCHEMA_CACHE_TTL = 300  # 5 minutes
 
+# ─── UUID → ID resolution cache ──────────────────────────
+
+_uuid_to_id_cache: dict[str, tuple[int, float]] = {}
+_UUID_CACHE_TTL = 300  # 5 minutes
+
+
+async def resolve_merchant_uuid_to_id(merchant_uuid: str) -> int | None:
+    """Resolve merchant_uuid → merchant_id using the replica. Cached for 5 min."""
+    now = time.time()
+    if merchant_uuid in _uuid_to_id_cache:
+        mid, expires_at = _uuid_to_id_cache[merchant_uuid]
+        if now < expires_at:
+            return mid
+
+    pool = await get_core_replica_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT merchant_id FROM public.merchants WHERE merchant_uuid = $1",
+            merchant_uuid,
+        )
+
+    if not row:
+        return None
+
+    merchant_id = row["merchant_id"]
+    _uuid_to_id_cache[merchant_uuid] = (merchant_id, now + _UUID_CACHE_TTL)
+    return merchant_id
+
 
 async def resolve_merchant_schema(merchant_id: int) -> str:
     """Resolve merchant_id → schema_name using the replica. Cached for 5 min."""
@@ -365,7 +393,7 @@ async def get_assigned_merchants(consumer_id: str) -> dict:
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT m.merchant_id, m.name, m.email, m.status, m.created_at,
+            SELECT m.merchant_id, m.merchant_uuid, m.name, m.email, m.status, m.created_at,
                    cma.granted_at, cma.scopes
             FROM public.consumer_merchant_access cma
             JOIN public.merchants m ON m.merchant_id = cma.merchant_id

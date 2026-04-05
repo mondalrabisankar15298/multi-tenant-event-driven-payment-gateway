@@ -9,17 +9,17 @@ export default function DashboardPage() {
   const [daily, setDaily] = useState([])
   const [methods, setMethods] = useState([])
 
-  const mid = selectedMerchant?.merchant_id
+  const muid = selectedMerchant?.merchant_uuid
 
   useEffect(() => {
-    if (mid) {
-      api.getSummary(mid).then(setSummary).catch(() => {})
-      api.getDaily(mid).then(setDaily).catch(() => {})
-      api.getMethods(mid).then(setMethods).catch(() => {})
+    if (muid) {
+      api.getSummary(muid).then(setSummary).catch(() => {})
+      api.getDaily(muid).then(setDaily).catch(() => {})
+      api.getMethods(muid).then(setMethods).catch(() => {})
     }
-  }, [mid])
+  }, [muid])
 
-  if (!mid) return <div className="empty-state"><h3>Select a merchant to view analytics</h3></div>
+  if (!muid) return <div className="empty-state"><h3>Select a merchant to view analytics</h3></div>
   if (!summary) return <div className="empty-state"><h3>Loading...</h3></div>
 
   return (

@@ -4,12 +4,12 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from ..database import get_pool, get_merchant_schema
 
-router = APIRouter(prefix="/api/{merchant_id}/payments", tags=["payments"])
+router = APIRouter(prefix="/api/{merchant_uuid}/payments", tags=["payments"])
 
 
 @router.get("")
 async def list_payments(
-    merchant_id: int,
+    merchant_uuid: str,
     status: Optional[str] = None,
     method: Optional[str] = None,
     customer_id: Optional[uuid.UUID] = None,
@@ -20,7 +20,7 @@ async def list_payments(
     page: int = 1,
     limit: int = 25,
 ):
-    schema = await get_merchant_schema(merchant_id)
+    schema = await get_merchant_schema(merchant_uuid)
     pool = await get_pool()
     async with pool.acquire() as conn:
         # Build dynamic WHERE clause
@@ -87,8 +87,8 @@ async def list_payments(
 
 
 @router.get("/{payment_id}")
-async def get_payment(merchant_id: int, payment_id: str):
-    schema = await get_merchant_schema(merchant_id)
+async def get_payment(merchant_uuid: str, payment_id: str):
+    schema = await get_merchant_schema(merchant_uuid)
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(

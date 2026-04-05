@@ -31,7 +31,7 @@ export default function EventsLogPage() {
 
   const [filters, setFilters] = useState({
     status: '',
-    merchant_id: '',
+    merchant_uuid: '',
     entity_type: '',
     event_type: '',
     from_date: '',
@@ -61,7 +61,7 @@ export default function EventsLogPage() {
   const setFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }))
 
   const clearFilters = () => setFilters({
-    status: '', merchant_id: '', entity_type: '', event_type: '', from_date: '', to_date: '',
+    status: '', merchant_uuid: '', entity_type: '', event_type: '', from_date: '', to_date: '',
   })
 
   const hasFilters = Object.values(filters).some(v => v !== '')
@@ -89,9 +89,9 @@ export default function EventsLogPage() {
     },
     { key: 'entity_type', label: 'Entity', render: (v) => <span style={{ textTransform: 'capitalize' }}>{v}</span> },
     {
-      key: 'merchant_id',
+      key: 'merchant_uuid',
       label: 'Merchant',
-      render: (mid) => merchants.find(m => m.merchant_id === mid)?.name || `#${mid}`
+      render: (muid) => merchants.find(m => m.merchant_uuid === muid)?.name || `#${muid}`
     },
     {
       key: 'status',
@@ -136,9 +136,9 @@ export default function EventsLogPage() {
               Merchant
             </label>
             <select className="form-input" style={{ padding: '6px 10px', fontSize: 13 }}
-              value={filters.merchant_id} onChange={e => setFilter('merchant_id', e.target.value)}>
+              value={filters.merchant_uuid} onChange={e => setFilter('merchant_uuid', e.target.value)}>
               <option value="">All Merchants</option>
-              {merchants.map(m => <option key={m.merchant_id} value={m.merchant_id}>{m.name}</option>)}
+              {merchants.map(m => <option key={m.merchant_uuid} value={m.merchant_uuid}>{m.name}</option>)}
             </select>
           </div>
 
@@ -250,7 +250,7 @@ export default function EventsLogPage() {
             {/* Metadata row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 16 }}>
               {[
-                ['Merchant', merchants.find(m => m.merchant_id === viewingEvent.merchant_id)?.name || `#${viewingEvent.merchant_id}`],
+                ['Merchant', merchants.find(m => m.merchant_uuid === viewingEvent.merchant_uuid)?.name || `#${viewingEvent.merchant_uuid}`],
                 ['Entity', `${viewingEvent.entity_type} / ${viewingEvent.entity_id?.substring(0, 12)}…`],
                 ['Created', new Date(viewingEvent.created_at).toLocaleString()],
               ].map(([label, val]) => (

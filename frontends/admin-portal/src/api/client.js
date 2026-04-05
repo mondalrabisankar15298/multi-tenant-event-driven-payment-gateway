@@ -31,41 +31,42 @@ export const api = {
     return request(`/merchants${qs ? `?${qs}` : ''}`, opts)
   },
   createMerchant: (data, opts) => request('/merchants', { method: 'POST', body: JSON.stringify(data), ...opts }),
-  getMerchant: (id, opts) => request(`/merchants/${id}`, opts),
-  updateMerchant: (id, data, opts) => request(`/merchants/${id}`, { method: 'PUT', body: JSON.stringify(data), ...opts }),
+  getMerchant: (uuid, opts) => request(`/merchants/${uuid}`, opts),
+  updateMerchant: (uuid, data, opts) => request(`/merchants/${uuid}`, { method: 'PUT', body: JSON.stringify(data), ...opts }),
+  getMerchantCredentials: (uuid, opts) => request(`/admin/merchants/${uuid}/credentials`, opts),
 
-  getCustomers: (mid, params = {}, opts) => {
+  getCustomers: (muid, params = {}, opts) => {
     const qs = Object.entries({ page: 1, limit: 25, ...params })
       .filter(([, v]) => v !== '' && v != null)
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join('&')
-    return request(`/${mid}/customers${qs ? `?${qs}` : ''}`, opts)
+    return request(`/${muid}/customers${qs ? `?${qs}` : ''}`, opts)
   },
-  createCustomer: (mid, data, opts) => request(`/${mid}/customers`, { method: 'POST', body: JSON.stringify(data), ...opts }),
-  updateCustomer: (mid, id, data, opts) => request(`/${mid}/customers/${id}`, { method: 'PUT', body: JSON.stringify(data), ...opts }),
-  deleteCustomer: (mid, id, opts) => request(`/${mid}/customers/${id}`, { method: 'DELETE', ...opts }),
+  createCustomer: (muid, data, opts) => request(`/${muid}/customers`, { method: 'POST', body: JSON.stringify(data), ...opts }),
+  updateCustomer: (muid, id, data, opts) => request(`/${muid}/customers/${id}`, { method: 'PUT', body: JSON.stringify(data), ...opts }),
+  deleteCustomer: (muid, id, opts) => request(`/${muid}/customers/${id}`, { method: 'DELETE', ...opts }),
 
-  getPayments: (mid, params = {}, opts) => {
+  getPayments: (muid, params = {}, opts) => {
     const qs = Object.entries({ page: 1, limit: 25, ...params })
       .filter(([, v]) => v !== '' && v != null)
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join('&')
-    return request(`/${mid}/payments${qs ? `?${qs}` : ''}`, opts)
+    return request(`/${muid}/payments${qs ? `?${qs}` : ''}`, opts)
   },
-  createPayment: (mid, data, opts) => request(`/${mid}/payments`, { method: 'POST', body: JSON.stringify(data), ...opts }),
-  updatePayment: (mid, id, data, opts) => request(`/${mid}/payments/${id}`, { method: 'PUT', body: JSON.stringify(data), ...opts }),
-  authorizePayment: (mid, id, opts) => request(`/${mid}/payments/${id}/authorize`, { method: 'POST', ...opts }),
-  capturePayment: (mid, id, opts) => request(`/${mid}/payments/${id}/capture`, { method: 'POST', ...opts }),
-  failPayment: (mid, id, opts) => request(`/${mid}/payments/${id}/fail`, { method: 'POST', ...opts }),
+  createPayment: (muid, data, opts) => request(`/${muid}/payments`, { method: 'POST', body: JSON.stringify(data), ...opts }),
+  updatePayment: (muid, id, data, opts) => request(`/${muid}/payments/${id}`, { method: 'PUT', body: JSON.stringify(data), ...opts }),
+  authorizePayment: (muid, id, opts) => request(`/${muid}/payments/${id}/authorize`, { method: 'POST', ...opts }),
+  capturePayment: (muid, id, opts) => request(`/${muid}/payments/${id}/capture`, { method: 'POST', ...opts }),
+  failPayment: (muid, id, opts) => request(`/${muid}/payments/${id}/fail`, { method: 'POST', ...opts }),
 
-  createRefund: (mid, payId, data, opts) => request(`/${mid}/payments/${payId}/refund`, { method: 'POST', body: JSON.stringify(data), ...opts }),
-  processRefund: (mid, refId, opts) => request(`/${mid}/refunds/${refId}/process`, { method: 'POST', ...opts }),
-  getRefunds: (mid, params = {}, opts) => {
+  createRefund: (muid, payId, data, opts) => request(`/${muid}/payments/${payId}/refund`, { method: 'POST', body: JSON.stringify(data), ...opts }),
+  processRefund: (muid, refId, opts) => request(`/${muid}/refunds/${refId}/process`, { method: 'POST', ...opts }),
+  getRefunds: (muid, params = {}, opts) => {
     const qs = Object.entries({ page: 1, limit: 25, ...params })
       .filter(([, v]) => v !== '' && v != null)
       .map(([k, v]) => `${k}=${encodeURIComponent(v)}`)
       .join('&')
-    return request(`/${mid}/refunds${qs ? `?${qs}` : ''}`, opts)
+    return request(`/${muid}/refunds${qs ? `?${qs}` : ''}`, opts)
   },
 
   getEvents: (params = {}, opts) => {

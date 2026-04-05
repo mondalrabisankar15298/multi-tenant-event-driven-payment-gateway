@@ -52,7 +52,7 @@ export default function MerchantsPage() {
     e.preventDefault()
     setCreating(true)
     try {
-      await api.updateMerchant(editingMerchant.merchant_id, { name, email, status })
+      await api.updateMerchant(editingMerchant.merchant_uuid, { name, email, status })
       await refreshMerchants()
       setEditingMerchant(null)
     } catch (err) {
@@ -64,7 +64,7 @@ export default function MerchantsPage() {
 
   const columns = [
     { 
-      key: 'merchant_id', 
+      key: 'merchant_uuid', 
       label: 'ID',
       render: (v) => <span style={{ color: 'var(--accent-primary)' }}>{v}</span>
     },

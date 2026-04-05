@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react'
 import { api, setApiKey } from '../api/client'
 
 const MerchantContext = createContext()
-const STORAGE_KEY = 'selectedMerchantId'
+const STORAGE_KEY = 'selectedMerchantUuid'
 
 export function MerchantProvider({ children }) {
   const [merchants, setMerchants] = useState([])
@@ -16,13 +16,19 @@ export function MerchantProvider({ children }) {
       setMerchants(data)
 
       if (data.length > 0) {
-        const savedId = localStorage.getItem(STORAGE_KEY)
-        const savedMerchant = savedId
-          ? data.find(m => String(m.merchant_id) === savedId)
+        const savedUuid = localStorage.getItem(STORAGE_KEY)
+        const savedMerchant = savedUuid
+          ? data.find(m => String(m.merchant_uuid) === savedUuid)
           : null
 
         const toSelect = savedMerchant || data[0]
-        setApiKey(toSelect.api_key)
+        // Fetch api_key from admin endpoint (not exposed in public list)
+        try {
+          const creds = await api.getMerchantCredentials(toSelect.merchant_uuid)
+          setApiKey(creds.api_key)
+        } catch (e) {
+          console.error('Failed to fetch merchant credentials:', e)
+        }
         setSelectedMerchantState(toSelect)
       }
     } catch (err) {
@@ -36,13 +42,21 @@ export function MerchantProvider({ children }) {
     fetchMerchants()
   }, [])
 
-  // Synchronously set api key BEFORE React re-renders (avoids race with page useEffects)
-  const setSelectedMerchant = (merchant) => {
-    setApiKey(merchant?.api_key || null)
-    setSelectedMerchantState(merchant)
+  const setSelectedMerchant = async (merchant) => {
     if (merchant) {
-      localStorage.setItem(STORAGE_KEY, String(merchant.merchant_id))
+      // Fetch api_key from admin endpoint
+      try {
+        const creds = await api.getMerchantCredentials(merchant.merchant_uuid)
+        setApiKey(creds.api_key)
+      } catch (e) {
+        console.error('Failed to fetch merchant credentials:', e)
+        setApiKey(null)
+      }
+      setSelectedMerchantState(merchant)
+      localStorage.setItem(STORAGE_KEY, String(merchant.merchant_uuid))
     } else {
+      setApiKey(null)
+      setSelectedMerchantState(null)
       localStorage.removeItem(STORAGE_KEY)
     }
   }

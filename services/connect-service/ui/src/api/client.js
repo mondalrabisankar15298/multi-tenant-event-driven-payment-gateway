@@ -20,8 +20,18 @@ class ApiClient {
     const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: response.statusText }));
-      throw new Error(error.detail || error.message || `HTTP ${response.status}`);
+      const errorData = await response.json().catch(() => ({ message: response.statusText }));
+      let errMsg = errorData.message || `HTTP ${response.status}`;
+      if (errorData.detail) {
+        if (typeof errorData.detail === 'string') {
+          errMsg = errorData.detail;
+        } else if (errorData.detail.message) {
+          errMsg = errorData.detail.message;
+        } else {
+          errMsg = JSON.stringify(errorData.detail);
+        }
+      }
+      throw new Error(errMsg);
     }
 
     return response.json();

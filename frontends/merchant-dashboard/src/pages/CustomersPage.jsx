@@ -5,12 +5,12 @@ import { api } from '../api/client'
 export default function CustomersPage() {
   const { selectedMerchant } = useMerchant()
   const [customers, setCustomers] = useState([])
-  const mid = selectedMerchant?.merchant_id
+  const muid = selectedMerchant?.merchant_uuid
 
-  const fetchCustomers = () => { if (mid) api.getCustomers(mid).then(setCustomers) }
-  useEffect(fetchCustomers, [mid])
+  const fetchCustomers = () => { if (muid) api.getCustomers(muid).then(setCustomers) }
+  useEffect(fetchCustomers, [muid])
 
-  if (!mid) return <div className="empty-state"><h3>Select a merchant to view customers</h3></div>
+  if (!muid) return <div className="empty-state"><h3>Select a merchant to view customers</h3></div>
 
   return (
     <div>

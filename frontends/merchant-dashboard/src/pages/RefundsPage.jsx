@@ -5,11 +5,11 @@ import { api } from '../api/client'
 export default function RefundsPage() {
   const { selectedMerchant } = useMerchant()
   const [refunds, setRefunds] = useState([])
-  const mid = selectedMerchant?.merchant_id
+  const muid = selectedMerchant?.merchant_uuid
 
-  useEffect(() => { if (mid) api.getRefunds(mid).then(setRefunds) }, [mid])
+  useEffect(() => { if (muid) api.getRefunds(muid).then(setRefunds) }, [muid])
 
-  if (!mid) return <div className="empty-state"><h3>Select a merchant to view refunds</h3></div>
+  if (!muid) return <div className="empty-state"><h3>Select a merchant to view refunds</h3></div>
 
   return (
     <div>

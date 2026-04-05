@@ -7,9 +7,9 @@ export default function PaymentsPage() {
   const [result, setResult] = useState({ data: [], total: 0, page: 1, pages: 0 })
   const [filters, setFilters] = useState({ status: '', method: '', page: 1 })
   
-  const mid = selectedMerchant?.merchant_id
+  const muid = selectedMerchant?.merchant_uuid
 
-  useEffect(() => { if (mid) fetchPayments() }, [mid, filters])
+  useEffect(() => { if (muid) fetchPayments() }, [muid, filters])
 
   const fetchPayments = async () => {
     const params = new URLSearchParams()
@@ -17,11 +17,11 @@ export default function PaymentsPage() {
     if (filters.method) params.set('method', filters.method)
     params.set('page', filters.page)
     params.set('limit', 25)
-    const data = await api.getPayments(mid, `?${params}`)
+    const data = await api.getPayments(muid, `?${params}`)
     setResult(data)
   }
 
-  if (!mid) return <div className="empty-state"><h3>Select a merchant to view payments</h3></div>
+  if (!muid) return <div className="empty-state"><h3>Select a merchant to view payments</h3></div>
 
   return (
     <div>

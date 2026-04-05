@@ -50,6 +50,7 @@ CREATE TABLE public.dead_letter_queue (
 -- Merchant mirror (synced from write DB via merchant.created.v1 events)
 CREATE TABLE public.merchants (
     merchant_id     INT PRIMARY KEY,
+    merchant_uuid   UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
     name            VARCHAR(255) NOT NULL,
     email           VARCHAR(255),
     schema_name     VARCHAR(100) UNIQUE NOT NULL,
@@ -57,6 +58,8 @@ CREATE TABLE public.merchants (
     created_at      TIMESTAMPTZ,
     updated_at      TIMESTAMPTZ
 );
+
+CREATE INDEX idx_read_merchants_uuid ON public.merchants(merchant_uuid);
 
 -- Consumer Dead Letter Queue
 CREATE TABLE public.consumer_dead_letter (

@@ -31,11 +31,11 @@ async def close_pool():
         pool = None
 
 
-async def get_merchant_schema(merchant_id: int) -> str:
+async def get_merchant_schema(merchant_uuid: str) -> str:
     p = await get_pool()
     async with p.acquire() as conn:
-        row = await conn.fetchrow("SELECT schema_name FROM public.merchants WHERE merchant_id = $1", merchant_id)
+        row = await conn.fetchrow("SELECT schema_name FROM public.merchants WHERE merchant_uuid = $1", merchant_uuid)
         if not row:
-            raise ValueError(f"Merchant {merchant_id} not found")
+            raise ValueError(f"Merchant {merchant_uuid} not found")
         from .utils.validators import validate_schema_name
         return validate_schema_name(row["schema_name"])

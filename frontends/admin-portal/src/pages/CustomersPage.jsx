@@ -17,7 +17,7 @@ export default function CustomersPage() {
   const [viewingCustomer, setViewingCustomer] = useState(null)
   const [toast, setToast] = useState(null)
 
-  const mid = selectedMerchant?.merchant_id
+  const muid = selectedMerchant?.merchant_uuid
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
@@ -25,8 +25,8 @@ export default function CustomersPage() {
   }
 
   useEffect(() => {
-    if (mid) fetchCustomers()
-  }, [mid, page, limit])
+    if (muid) fetchCustomers()
+  }, [muid, page, limit])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -42,7 +42,7 @@ export default function CustomersPage() {
 
   const fetchCustomers = async () => {
     try {
-      const data = await api.getCustomers(mid, { page, limit })
+      const data = await api.getCustomers(muid, { page, limit })
       setCustomers(data.data)
       setTotalItems(data.total)
     } catch (err) {
@@ -58,7 +58,7 @@ export default function CustomersPage() {
   const handleCreate = async (e) => {
     e.preventDefault()
     try {
-      await api.createCustomer(mid, { name, email, phone })
+      await api.createCustomer(muid, { name, email, phone })
       await fetchCustomers()
       setShowForm(false)
       setName(''); setEmail(''); setPhone('')
@@ -78,7 +78,7 @@ export default function CustomersPage() {
   const handleUpdate = async (e) => {
     e.preventDefault()
     try {
-      await api.updateCustomer(mid, editingCustomer.customer_id, { name, email, phone })
+      await api.updateCustomer(muid, editingCustomer.customer_id, { name, email, phone })
       await fetchCustomers()
       setEditingCustomer(null)
       showToast('Customer updated successfully!')
@@ -90,7 +90,7 @@ export default function CustomersPage() {
   const handleDelete = async (id) => {
     if (!confirm('Delete this customer?')) return
     try {
-      await api.deleteCustomer(mid, id)
+      await api.deleteCustomer(muid, id)
       await fetchCustomers()
       showToast('Customer deleted.')
     } catch (err) {
@@ -98,7 +98,7 @@ export default function CustomersPage() {
     }
   }
 
-  if (!mid) return <div className="empty-state"><h3>Select a merchant to manage customers</h3></div>
+  if (!muid) return <div className="empty-state"><h3>Select a merchant to manage customers</h3></div>
 
   const columns = [
     { 

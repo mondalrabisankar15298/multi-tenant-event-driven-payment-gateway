@@ -187,3 +187,23 @@ async def get_merchant(merchant_id: int) -> dict | None:
             merchant_id
         )
         return dict(row) if row else None
+
+
+async def get_merchant_by_uuid(merchant_uuid: str) -> dict | None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM public.merchants WHERE merchant_uuid = $1",
+            merchant_uuid
+        )
+        return dict(row) if row else None
+
+
+async def get_merchant_id_by_uuid(merchant_uuid: str) -> int | None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT merchant_id FROM public.merchants WHERE merchant_uuid = $1",
+            merchant_uuid
+        )
+        return row["merchant_id"] if row else None

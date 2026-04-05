@@ -8,14 +8,13 @@ export function MerchantProvider({ children }) {
   const [selectedMerchant, _setSelectedMerchant] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // Wrapper to sync state, localStorage, and API client headers
   const setSelectedMerchant = (merchant) => {
     _setSelectedMerchant(merchant)
     if (merchant) {
-      localStorage.setItem('selected_merchant_id', merchant.merchant_id)
+      localStorage.setItem('selected_merchant_uuid', merchant.merchant_uuid)
       api.setApiKey(merchant.api_key)
     } else {
-      localStorage.removeItem('selected_merchant_id')
+      localStorage.removeItem('selected_merchant_uuid')
       api.setApiKey(null)
     }
   }
@@ -24,13 +23,13 @@ export function MerchantProvider({ children }) {
     api.getMerchants().then(data => {
       setMerchants(data)
       
-      const savedId = localStorage.getItem('selected_merchant_id')
-      const savedMerchant = data.find(m => String(m.merchant_id) === String(savedId))
+      const savedUuid = localStorage.getItem('selected_merchant_uuid')
+      const savedMerchant = data.find(m => String(m.merchant_uuid) === String(savedUuid))
       
       if (savedMerchant) {
         setSelectedMerchant(savedMerchant)
       } else if (data.length > 0) {
-        setSelectedMerchant(data[0]) // Default to 1st merchant
+        setSelectedMerchant(data[0])
       }
 
       setLoading(false)
