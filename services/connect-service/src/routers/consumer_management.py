@@ -20,6 +20,7 @@ from ..services.oauth_service import (
     assign_merchants,
     remove_merchant_access,
     get_consumer_merchants,
+    list_all_merchants,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,7 @@ class UpdateConsumerRequest(BaseModel):
 
 
 class AssignMerchantsRequest(BaseModel):
-    merchant_ids: list[int]
+    merchant_uuids: list[str]
 
 
 # ─── Endpoints ────────────────────────────────────────────
@@ -137,6 +138,13 @@ async def activate_consumer_endpoint(consumer_id: str):
 
 # ─── Merchant Assignment ──────────────────────────────────
 
+@router.get("/merchants/all")
+async def get_all_merchants_global():
+    """List all global merchants available in the system."""
+    merchants = await list_all_merchants()
+    return {"data": merchants, "total": len(merchants)}
+
+
 @router.post("/{consumer_id}/merchants")
 async def assign_merchants_endpoint(consumer_id: str, req: AssignMerchantsRequest):
     """Assign merchants to a consumer."""
@@ -144,13 +152,13 @@ async def assign_merchants_endpoint(consumer_id: str, req: AssignMerchantsReques
     if not consumer:
         raise HTTPException(status_code=404, detail="Consumer not found")
 
-    results = await assign_merchants(consumer_id, req.merchant_ids)
+    results = await assign_merchants(consumer_id, req.merchant_uuids)
     return {"data": results, "message": f"Assigned {len(results)} merchants"}
 
 
 @router.delete("/{consumer_id}/merchants/{merchant_id}")
-async def remove_merchant_endpoint(consumer_id: str, merchant_id: int):
-    """Remove merchant access from a consumer."""
+async def remove_merchant_endpoint(consumer_id: str, merchant_id: str):
+    """Remove merchant access from a consumer using merchant UUID."""
     removed = await remove_merchant_access(consumer_id, merchant_id)
     if not removed:
         raise HTTPException(status_code=404, detail="Merchant access not found")

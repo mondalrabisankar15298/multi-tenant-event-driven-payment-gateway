@@ -140,23 +140,26 @@ export default function Consumers() {
                 </div>
                 <div className="form-group">
                   <label>Scopes</label>
-                  {SCOPE_OPTIONS.map(scope => (
-                    <label key={scope} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0', fontSize: 13 }}>
-                      <input
-                        type="checkbox"
-                        checked={form.scopes.includes(scope)}
-                        onChange={e => {
-                          setForm(prev => ({
-                            ...prev,
-                            scopes: e.target.checked
-                              ? [...prev.scopes, scope]
-                              : prev.scopes.filter(s => s !== scope),
-                          }))
-                        }}
-                      />
-                      <code style={{ fontSize: 12, color: 'var(--accent)' }}>{scope}</code>
-                    </label>
-                  ))}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
+                    {SCOPE_OPTIONS.map(scope => (
+                      <label key={scope} className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--bg-hover)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: '1px solid var(--border)' }}>
+                        <input
+                          type="checkbox"
+                          checked={form.scopes.includes(scope)}
+                          onChange={e => {
+                            setForm(prev => ({
+                              ...prev,
+                              scopes: e.target.checked
+                                ? [...prev.scopes, scope]
+                                : prev.scopes.filter(s => s !== scope),
+                            }))
+                          }}
+                          style={{ margin: 0, width: 'auto' }}
+                        />
+                        <code style={{ fontSize: 12, color: 'var(--accent)', background: 'transparent', padding: 0 }}>{scope}</code>
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div className="modal-actions">
                   <button type="button" className="btn btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>

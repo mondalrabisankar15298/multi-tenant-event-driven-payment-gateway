@@ -9,23 +9,39 @@ export default function ConsumerDetail() {
   const [consumer, setConsumer] = useState(null)
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
+  
   const [showMerchantModal, setShowMerchantModal] = useState(false)
-  const [merchantIds, setMerchantIds] = useState('')
+  const [allMerchants, setAllMerchants] = useState([])
+  const [selectedMerchantUuids, setSelectedMerchantUuids] = useState([])
+
+  const [showEditWebhookModal, setShowEditWebhookModal] = useState(false)
+  const [editWebhookUrl, setEditWebhookUrl] = useState('')
+
+  const [showEditScopeModal, setShowEditScopeModal] = useState(false)
+  const [editScopes, setEditScopes] = useState([])
+
   const [apiCallsChart, setApiCallsChart] = useState([])
   const [webhooksChart, setWebhooksChart] = useState([])
+
+  const SCOPE_OPTIONS = [
+    'payments:read', 'customers:read', 'refunds:read',
+    'events:read', 'merchants:read', 'webhooks:manage',
+  ]
 
   useEffect(() => { loadAll() }, [id])
 
   async function loadAll() {
     setLoading(true)
     try {
-      const [consumerRes, statsRes] = await Promise.allSettled([
+      const [consumerRes, statsRes, merchantsRes] = await Promise.allSettled([
         api.getConsumer(id),
         api.getConsumerStats(id),
+        api.listAllMerchants(),
       ])
 
       if (consumerRes.status === 'fulfilled') setConsumer(consumerRes.value.data)
       if (statsRes.status === 'fulfilled') setStats(statsRes.value.data)
+      if (merchantsRes.status === 'fulfilled') setAllMerchants(merchantsRes.value.data)
 
       // Load charts
       try {
@@ -56,17 +72,35 @@ export default function ConsumerDetail() {
   async function handleAssignMerchants(e) {
     e.preventDefault()
     try {
-      const ids = merchantIds.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
-      await api.assignMerchants(id, ids)
+      if (selectedMerchantUuids.length === 0) return alert('Select at least one merchant.')
+      await api.assignMerchants(id, selectedMerchantUuids)
       setShowMerchantModal(false)
-      setMerchantIds('')
+      setSelectedMerchantUuids([])
       await loadAll()
     } catch (err) { alert(err.message) }
   }
 
-  async function handleRemoveMerchant(merchantId) {
-    if (!confirm(`Remove merchant ${merchantId} access?`)) return
-    await api.removeMerchant(id, merchantId)
+  async function handleUpdateWebhook(e) {
+    e.preventDefault()
+    try {
+      await api.updateConsumer(id, { webhook_url: editWebhookUrl })
+      setShowEditWebhookModal(false)
+      await loadAll()
+    } catch (err) { alert(err.message) }
+  }
+
+  async function handleUpdateScopes(e) {
+    e.preventDefault()
+    try {
+      await api.updateConsumer(id, { scopes: editScopes })
+      setShowEditScopeModal(false)
+      await loadAll()
+    } catch (err) { alert(err.message) }
+  }
+
+  async function handleRemoveMerchant(m) {
+    if (!confirm(`Remove ${m.merchant_name} access?`)) return
+    await api.removeMerchant(id, m.merchant_uuid)
     await loadAll()
   }
 
@@ -129,15 +163,23 @@ export default function ConsumerDetail() {
           <div className="mono" style={{ fontSize: 12, color: 'var(--text-primary)', wordBreak: 'break-all' }}>{consumer.client_id}</div>
         </div>
         <div className="stat-card">
-          <div className="label">Rate Limit</div>
-          <div className="value">{consumer.rate_limit_requests}<span style={{ fontSize: 14, color: 'var(--text-muted)' }}> / {consumer.rate_limit_window_seconds}s</span></div>
-        </div>
-        <div className="stat-card">
-          <div className="label">Scopes</div>
+          <div className="label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            Scopes
+            <button className="btn btn-sm" onClick={() => { setEditScopes(consumer.scopes || []); setShowEditScopeModal(true) }} style={{ padding: '0 4px', background: 'transparent', border: 'none', color: '#6366f1', cursor: 'pointer' }}>Edit</button>
+          </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
             {(consumer.scopes || []).map(s => (
               <span key={s} className="badge badge-active" style={{ fontSize: 10 }}>{s}</span>
             ))}
+          </div>
+        </div>
+        <div className="stat-card" style={{ gridColumn: 'span 2' }}>
+          <div className="label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            Webhook URL
+            <button className="btn btn-sm" onClick={() => { setEditWebhookUrl(consumer.webhook_url || ''); setShowEditWebhookModal(true) }} style={{ padding: '0 4px', background: 'transparent', border: 'none', color: '#6366f1', cursor: 'pointer' }}>Edit</button>
+          </div>
+          <div className="mono" style={{ fontSize: 12, color: 'var(--text-primary)', wordBreak: 'break-all', marginTop: 4 }}>
+            {consumer.webhook_url || 'Not configured'}
           </div>
         </div>
       </div>
@@ -209,12 +251,12 @@ export default function ConsumerDetail() {
             <thead><tr><th>ID</th><th>Name</th><th>Email</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {consumer.merchants.map(m => (
-                <tr key={m.merchant_id}>
-                  <td>{m.merchant_id}</td>
+                <tr key={m.merchant_uuid}>
+                  <td>{m.merchant_uuid?.slice(0, 8)}...</td>
                   <td style={{ color: 'var(--text-primary)' }}>{m.merchant_name}</td>
                   <td>{m.merchant_email}</td>
                   <td><span className={`badge badge-${m.merchant_status === 'active' ? 'active' : 'suspended'}`}>{m.merchant_status}</span></td>
-                  <td><button className="btn btn-sm btn-danger" onClick={() => handleRemoveMerchant(m.merchant_id)}>Remove</button></td>
+                  <td><button className="btn btn-sm btn-danger" onClick={() => handleRemoveMerchant(m)}>Remove</button></td>
                 </tr>
               ))}
             </tbody>
@@ -228,13 +270,94 @@ export default function ConsumerDetail() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <form onSubmit={handleAssignMerchants}>
               <h3>Assign Merchants</h3>
-              <div className="form-group">
-                <label>Merchant IDs (comma-separated)</label>
-                <input value={merchantIds} onChange={e => setMerchantIds(e.target.value)} placeholder="1, 2, 3" required />
+              <div className="form-group" style={{ maxHeight: 300, overflowY: 'auto' }}>
+                <label>Select Merchants</label>
+                {allMerchants.filter(m => !(consumer.merchants || []).some(cm => cm.merchant_uuid === m.merchant_uuid)).length === 0 ? (
+                  <div style={{ padding: '16px', background: 'var(--bg-hover)', borderRadius: 'var(--radius-sm)', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    All available merchants are already assigned.
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px', marginTop: '8px' }}>
+                    {allMerchants
+                      .filter(m => !(consumer.merchants || []).some(cm => cm.merchant_uuid === m.merchant_uuid))
+                      .map(m => (
+                        <label key={m.merchant_uuid} className="merchant-checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-hover)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: '1px solid var(--border)', transition: 'border-color 0.15s ease' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedMerchantUuids.includes(m.merchant_uuid)}
+                            onChange={e => {
+                              setSelectedMerchantUuids(prev =>
+                                e.target.checked ? [...prev, m.merchant_uuid] : prev.filter(uid => uid !== m.merchant_uuid)
+                              )
+                            }}
+                            style={{ margin: 0, width: 'auto', accentColor: 'var(--accent)' }}
+                          />
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ color: 'var(--text-primary)', fontWeight: 500, fontSize: 13 }}>{m.name}</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{m.email}</span>
+                          </div>
+                        </label>
+                      ))}
+                  </div>
+                )}
               </div>
               <div className="modal-actions">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowMerchantModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Assign</button>
+                <button type="submit" className="btn btn-primary">Assign Selected</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Webhook Modal */}
+      {showEditWebhookModal && (
+        <div className="modal-overlay" onClick={() => setShowEditWebhookModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <form onSubmit={handleUpdateWebhook}>
+              <h3>Webhook Configuration</h3>
+              <div className="form-group">
+                <label>Webhook URL (HTTPS)</label>
+                <input type="url" value={editWebhookUrl} onChange={e => setEditWebhookUrl(e.target.value)} placeholder="https://api.example.com/webhooks" />
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEditWebhookModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Webhook</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Scopes Modal */}
+      {showEditScopeModal && (
+        <div className="modal-overlay" onClick={() => setShowEditScopeModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <form onSubmit={handleUpdateScopes}>
+              <h3>Update Scopes</h3>
+              <div className="form-group">
+                <label>Allowed Scopes</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
+                  {SCOPE_OPTIONS.map(scope => (
+                    <label key={scope} className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg-hover)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', border: '1px solid var(--border)' }}>
+                      <input
+                        type="checkbox"
+                        checked={editScopes.includes(scope)}
+                        onChange={e => {
+                          setEditScopes(prev =>
+                            e.target.checked ? [...prev, scope] : prev.filter(s => s !== scope)
+                          )
+                        }}
+                        style={{ margin: 0, width: 'auto', accentColor: 'var(--accent)' }}
+                      />
+                      <code style={{ fontSize: 12, color: 'var(--accent)', background: 'transparent', padding: 0 }}>{scope}</code>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEditScopeModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Scopes</button>
               </div>
             </form>
           </div>

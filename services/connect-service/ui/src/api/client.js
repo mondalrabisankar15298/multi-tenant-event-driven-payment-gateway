@@ -2,12 +2,16 @@ const API_BASE = '/api/v1';
 
 class ApiClient {
   constructor() {
-    this.adminKey = localStorage.getItem('admin_api_key') || '';
+    this.adminKey = sessionStorage.getItem('admin_api_key') || '';
   }
 
   setAdminKey(key) {
     this.adminKey = key;
-    localStorage.setItem('admin_api_key', key);
+    if (key) {
+      sessionStorage.setItem('admin_api_key', key);
+    } else {
+      sessionStorage.removeItem('admin_api_key');
+    }
   }
 
   async request(path, options = {}) {
@@ -46,9 +50,11 @@ class ApiClient {
   async suspendConsumer(id) { return this.request(`/admin/consumers/${id}/suspend`, { method: 'POST' }); }
   async activateConsumer(id) { return this.request(`/admin/consumers/${id}/activate`, { method: 'POST' }); }
   async rotateSecret(id) { return this.request(`/admin/consumers/${id}/rotate-secret`, { method: 'POST' }); }
-  async assignMerchants(id, merchantIds) { return this.request(`/admin/consumers/${id}/merchants`, { method: 'POST', body: JSON.stringify({ merchant_ids: merchantIds }) }); }
+  async assignMerchants(id, merchantUuids) { return this.request(`/admin/consumers/${id}/merchants`, { method: 'POST', body: JSON.stringify({ merchant_uuids: merchantUuids }) }); }
   async removeMerchant(consumerId, merchantId) { return this.request(`/admin/consumers/${consumerId}/merchants/${merchantId}`, { method: 'DELETE' }); }
   async listConsumerMerchants(id) { return this.request(`/admin/consumers/${id}/merchants`); }
+
+  async listAllMerchants() { return this.request('/admin/consumers/merchants/all'); }
 
   // Analytics
   async getOverview() { return this.request('/admin/analytics/overview'); }

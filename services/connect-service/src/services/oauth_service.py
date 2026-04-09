@@ -210,33 +210,41 @@ async def rotate_secret(consumer_id: str) -> dict | None:
 
 # ─── Merchant Access ──────────────────────────────────────
 
-async def assign_merchants(consumer_id: str, merchant_ids: list[int], granted_by: str = "admin") -> list[dict]:
-    """Assign merchants to a consumer."""
+async def assign_merchants(consumer_id: str, merchant_uuids: list[str], granted_by: str = "admin") -> list[dict]:
+    """Assign merchants to a consumer using their UUIDs."""
     pool = await get_core_primary_pool()
     results = []
     async with pool.acquire() as conn:
-        for mid in merchant_ids:
+        for muuid in merchant_uuids:
             row = await conn.fetchrow(
                 """
                 INSERT INTO public.consumer_merchant_access (consumer_id, merchant_id, granted_by)
-                VALUES ($1, $2, $3)
+                SELECT $1, merchant_id, $3
+                FROM public.merchants
+                WHERE merchant_uuid = $2::uuid
                 ON CONFLICT (consumer_id, merchant_id) DO NOTHING
                 RETURNING *
                 """,
-                consumer_id, mid, granted_by,
+                consumer_id, muuid, granted_by,
             )
             if row:
-                results.append(dict(row))
+                res_dict = dict(row)
+                res_dict.pop("merchant_id", None)
+                results.append(res_dict)
     return results
 
 
-async def remove_merchant_access(consumer_id: str, merchant_id: int) -> bool:
-    """Remove a merchant from a consumer's access list."""
+async def remove_merchant_access(consumer_id: str, merchant_uuid: str) -> bool:
+    """Remove a merchant from a consumer's access list using the merchant's UUID."""
     pool = await get_core_primary_pool()
     async with pool.acquire() as conn:
         result = await conn.execute(
-            "DELETE FROM public.consumer_merchant_access WHERE consumer_id = $1 AND merchant_id = $2",
-            consumer_id, merchant_id,
+            """
+            DELETE FROM public.consumer_merchant_access
+            WHERE consumer_id = $1
+              AND merchant_id = (SELECT merchant_id FROM public.merchants WHERE merchant_uuid = $2::uuid)
+            """,
+            consumer_id, merchant_uuid,
         )
     return result != "DELETE 0"
 
@@ -247,13 +255,30 @@ async def get_consumer_merchants(consumer_id: str) -> list[dict]:
     async with pool.acquire() as conn:
         rows = await conn.fetch(
             """
-            SELECT cma.*, m.name AS merchant_name, m.email AS merchant_email, m.status AS merchant_status
+            SELECT cma.*, m.merchant_uuid, m.name AS merchant_name, m.email AS merchant_email, m.status AS merchant_status
             FROM public.consumer_merchant_access cma
             JOIN public.merchants m ON cma.merchant_id = m.merchant_id
             WHERE cma.consumer_id = $1
             ORDER BY cma.granted_at DESC
             """,
             consumer_id,
+        )
+    return [
+        {k: v for k, v in dict(r).items() if k != "merchant_id"}
+        for r in rows
+    ]
+
+
+async def list_all_merchants() -> list[dict]:
+    """Get all merchants in the system with their UUIDs for Admin UI."""
+    pool = await get_core_primary_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT merchant_uuid, name, email, status, created_at 
+            FROM public.merchants 
+            ORDER BY created_at DESC
+            """
         )
     return [dict(r) for r in rows]
 

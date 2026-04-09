@@ -6,21 +6,21 @@ import ConsumerDetail from './pages/ConsumerDetail'
 import { api } from './api/client'
 
 export default function App() {
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('admin_api_key') || '')
+  const [apiKey, setApiKey] = useState(() => sessionStorage.getItem('admin_api_key') || '')
   const [keySubmitted, setKeySubmitted] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(!!localStorage.getItem('admin_api_key'))
+  const [initialLoading, setInitialLoading] = useState(!!sessionStorage.getItem('admin_api_key'))
 
   const [loadingLogin, setLoadingLogin] = useState(false)
   const [loginError, setLoginError] = useState(null)
 
   React.useEffect(() => {
-    const savedKey = localStorage.getItem('admin_api_key')
+    const savedKey = sessionStorage.getItem('admin_api_key')
     if (savedKey) {
       api.setAdminKey(savedKey)
       api.getOverview()
         .then(() => setKeySubmitted(true))
         .catch(() => {
-          localStorage.removeItem('admin_api_key')
+          sessionStorage.removeItem('admin_api_key')
           api.setAdminKey('')
           setApiKey('')
         })
@@ -132,11 +132,8 @@ export default function App() {
     )
   }
 
-  // Support both /admin deployment (FastAPI) and root deployment (Nginx / Vite)
-  const basename = window.location.pathname.startsWith('/admin') ? '/admin' : '/'
-
   return (
-    <BrowserRouter basename={basename}>
+    <BrowserRouter>
       <div className="app-layout">
         <aside className="sidebar">
           <div className="sidebar-logo">
@@ -150,9 +147,8 @@ export default function App() {
           <div style={{ padding: '0 12px', marginTop: 'auto' }}>
             <button
               onClick={() => {
-                localStorage.removeItem('admin_api_key')
-                setApiKey('')
-                setKeySubmitted(false)
+                sessionStorage.removeItem('admin_api_key')
+                window.location.href = '/'
               }}
               style={{
                 width: '100%',
@@ -165,7 +161,7 @@ export default function App() {
                 cursor: 'pointer',
               }}
             >
-              🔑 Change API Key
+              🚪 Log Out
             </button>
           </div>
         </aside>
