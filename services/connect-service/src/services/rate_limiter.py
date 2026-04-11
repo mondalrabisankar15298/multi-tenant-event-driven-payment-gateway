@@ -90,6 +90,45 @@ class RateLimiter:
             window_seconds=window_seconds,
         )
 
+    async def get_rate_limit_status(self, consumer_id: str) -> dict:
+        """Read-only: inspect current sliding window state for Admin UI. Does NOT increment the counter."""
+        redis = await self._get_redis()
+
+        consumer = await get_cached_consumer(consumer_id)
+        max_requests = settings.RATE_LIMIT_DEFAULT_REQUESTS
+        window_seconds = settings.RATE_LIMIT_DEFAULT_WINDOW_SECONDS
+
+        if consumer:
+            max_requests = consumer.get("rate_limit_requests", max_requests)
+            window_seconds = consumer.get("rate_limit_window_seconds", window_seconds)
+
+        key = f"rate_limit:{consumer_id}"
+        now = time.time()
+        window_start_ts = now - window_seconds
+
+        # Prune expired entries first (non-mutating of valid entries)
+        await redis.zremrangebyscore(key, 0, window_start_ts)
+        calls_made = await redis.zcard(key)
+
+        # Oldest entry = window start
+        oldest = await redis.zrange(key, 0, 0, withscores=True)
+        if oldest:
+            window_start_actual = oldest[0][1]
+            window_end_actual = window_start_actual + window_seconds
+        else:
+            window_start_actual = now
+            window_end_actual = now + window_seconds
+
+        return {
+            "limit": max_requests,
+            "window_seconds": window_seconds,
+            "calls_made": calls_made,
+            "calls_remaining": max(0, max_requests - calls_made),
+            "window_start": datetime.fromtimestamp(window_start_actual, tz=timezone.utc).isoformat(),
+            "window_end": datetime.fromtimestamp(window_end_actual, tz=timezone.utc).isoformat(),
+            "reset_at": int(window_end_actual),
+        }
+
     async def check_oauth_rate_limit(self, client_id: str) -> RateLimitResult:
         """Separate rate limit for OAuth token endpoint (brute-force protection)."""
         redis = await self._get_redis()

@@ -22,6 +22,7 @@ from ..services.oauth_service import (
     get_consumer_merchants,
     list_all_merchants,
 )
+from ..services.rate_limiter import rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,14 @@ async def get_consumer_detail(consumer_id: str):
         raise HTTPException(status_code=404, detail="Consumer not found")
 
     merchants = await get_consumer_merchants(consumer_id)
-    return {"data": {**consumer, "merchants": merchants}}
+
+    # Enrich with live rate limit status from Redis
+    try:
+        rate_limit_status = await rate_limiter.get_rate_limit_status(consumer_id)
+    except Exception:
+        rate_limit_status = None
+
+    return {"data": {**consumer, "merchants": merchants, "rate_limit_status": rate_limit_status}}
 
 
 @router.put("/{consumer_id}")

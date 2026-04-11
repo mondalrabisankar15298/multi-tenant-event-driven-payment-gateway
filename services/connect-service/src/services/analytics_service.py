@@ -230,3 +230,121 @@ async def get_time_series_webhooks(
         }
         for r in rows
     ]
+
+
+async def get_audit_summary(consumer_id: str) -> dict:
+    """Total API call counts across all time periods. Reads from Replica."""
+    pool = await get_core_replica_pool()
+    now = datetime.now(timezone.utc)
+
+    async with pool.acquire() as conn:
+        total_all_time = await conn.fetchval(
+            "SELECT COUNT(*) FROM public.api_call_audit_log WHERE consumer_id = $1",
+            consumer_id,
+        )
+        total_24h = await conn.fetchval(
+            "SELECT COUNT(*) FROM public.api_call_audit_log WHERE consumer_id = $1 AND called_at > $2",
+            consumer_id, now - timedelta(hours=24),
+        )
+        total_7d = await conn.fetchval(
+            "SELECT COUNT(*) FROM public.api_call_audit_log WHERE consumer_id = $1 AND called_at > $2",
+            consumer_id, now - timedelta(days=7),
+        )
+        total_30d = await conn.fetchval(
+            "SELECT COUNT(*) FROM public.api_call_audit_log WHERE consumer_id = $1 AND called_at > $2",
+            consumer_id, now - timedelta(days=30),
+        )
+        errors_24h = await conn.fetchval(
+            "SELECT COUNT(*) FROM public.api_call_audit_log WHERE consumer_id = $1 AND called_at > $2 AND status_code >= 400",
+            consumer_id, now - timedelta(hours=24),
+        )
+
+    return {
+        "total_all_time": total_all_time,
+        "total_24h": total_24h,
+        "total_7d": total_7d,
+        "total_30d": total_30d,
+        "errors_24h": errors_24h,
+        "success_rate_24h": round(((total_24h - errors_24h) / total_24h * 100), 1) if total_24h > 0 else 100.0,
+    }
+
+
+async def get_endpoint_breakdown(consumer_id: str) -> list[dict]:
+    """API calls grouped by endpoint with counts and avg response time. Reads from Replica."""
+    pool = await get_core_replica_pool()
+    now = datetime.now(timezone.utc)
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT
+                endpoint,
+                method,
+                COUNT(*) AS total_calls,
+                COUNT(*) FILTER (WHERE status_code >= 400) AS error_calls,
+                ROUND(AVG(response_time_ms)::numeric, 1) AS avg_response_ms,
+                MAX(called_at) AS last_called_at
+            FROM public.api_call_audit_log
+            WHERE consumer_id = $1 AND called_at > $2
+            GROUP BY endpoint, method
+            ORDER BY total_calls DESC
+            LIMIT 20
+            """,
+            consumer_id, now - timedelta(days=30),
+        )
+
+    return [
+        {
+            "endpoint": r["endpoint"],
+            "method": r["method"],
+            "total_calls": r["total_calls"],
+            "error_calls": r["error_calls"],
+            "success_calls": r["total_calls"] - r["error_calls"],
+            "avg_response_ms": float(r["avg_response_ms"] or 0),
+            "last_called_at": r["last_called_at"].isoformat() if r["last_called_at"] else None,
+        }
+        for r in rows
+    ]
+
+
+async def get_raw_audit_log(consumer_id: str, page: int = 1, page_size: int = 50) -> dict:
+    """Paginated raw API call audit log. Reads from Replica."""
+    pool = await get_core_replica_pool()
+    offset = (page - 1) * page_size
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT id, endpoint, method, status_code, response_time_ms,
+                   request_params, error_message, called_at
+            FROM public.api_call_audit_log
+            WHERE consumer_id = $1
+            ORDER BY called_at DESC
+            LIMIT $2 OFFSET $3
+            """,
+            consumer_id, page_size, offset,
+        )
+        total = await conn.fetchval(
+            "SELECT COUNT(*) FROM public.api_call_audit_log WHERE consumer_id = $1",
+            consumer_id,
+        )
+
+    return {
+        "logs": [
+            {
+                "id": str(r["id"]),
+                "endpoint": r["endpoint"],
+                "method": r["method"],
+                "status_code": r["status_code"],
+                "response_time_ms": r["response_time_ms"],
+                "request_params": r["request_params"],
+                "error_message": r["error_message"],
+                "called_at": r["called_at"].isoformat(),
+            }
+            for r in rows
+        ],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size,
+    }

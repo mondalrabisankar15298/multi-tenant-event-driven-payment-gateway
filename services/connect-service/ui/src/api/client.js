@@ -61,6 +61,9 @@ class ApiClient {
   async getConsumerStats(id) { return this.request(`/admin/analytics/consumers/${id}`); }
   async getConsumerApiCalls(id, params = '') { return this.request(`/admin/analytics/consumers/${id}/api-calls${params}`); }
   async getConsumerWebhooks(id, params = '') { return this.request(`/admin/analytics/consumers/${id}/webhooks${params}`); }
+  async getAuditSummary(id) { return this.request(`/admin/analytics/consumers/${id}/audit-summary`); }
+  async getEndpointBreakdown(id) { return this.request(`/admin/analytics/consumers/${id}/endpoint-breakdown`); }
+  async getAuditLog(id, page = 1, pageSize = 50) { return this.request(`/admin/analytics/consumers/${id}/audit-log?page=${page}&page_size=${pageSize}`); }
 }
 
 export const api = new ApiClient();

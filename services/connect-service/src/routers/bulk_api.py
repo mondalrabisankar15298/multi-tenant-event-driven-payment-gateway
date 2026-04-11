@@ -108,11 +108,13 @@ async def list_payments(
 ):
     """List payments with cursor-based pagination. Reads from Core DB Replica."""
     merchant_id = _get_merchant_id(request)
+    merchant_uuid = getattr(request.state, "merchant_uuid", None)
     start = time.time()
 
     try:
         result = await bulk_service.get_payments(
             merchant_id=merchant_id,
+            merchant_uuid=merchant_uuid,
             cursor=cursor,
             limit=limit,
             status=status,
@@ -143,11 +145,13 @@ async def list_customers(
 ):
     """List customers with cursor-based pagination. Reads from Core DB Replica."""
     merchant_id = _get_merchant_id(request)
+    merchant_uuid = getattr(request.state, "merchant_uuid", None)
     start = time.time()
 
     try:
         result = await bulk_service.get_customers(
             merchant_id=merchant_id,
+            merchant_uuid=merchant_uuid,
             cursor=cursor,
             limit=limit,
             updated_since=_parse_datetime(updated_since),
@@ -177,11 +181,13 @@ async def list_refunds(
 ):
     """List refunds with cursor-based pagination. Reads from Core DB Replica."""
     merchant_id = _get_merchant_id(request)
+    merchant_uuid = getattr(request.state, "merchant_uuid", None)
     start = time.time()
 
     try:
         result = await bulk_service.get_refunds(
             merchant_id=merchant_id,
+            merchant_uuid=merchant_uuid,
             cursor=cursor,
             limit=limit,
             status=status,
@@ -214,11 +220,13 @@ async def list_events(
 ):
     """List domain events with cursor-based pagination. Reads from Core DB Replica."""
     merchant_id = _get_merchant_id(request)
+    merchant_uuid = getattr(request.state, "merchant_uuid", None)
     start = time.time()
 
     try:
         result = await bulk_service.get_events(
             merchant_id=merchant_id,
+            merchant_uuid=merchant_uuid,
             cursor=cursor,
             limit=limit,
             event_type=event_type,

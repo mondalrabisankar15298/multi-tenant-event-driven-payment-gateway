@@ -64,7 +64,7 @@ app.include_router(seed_proxy.router)
 @app.get("/api/events", tags=["events"])
 async def get_events(
     status: str = None,
-    merchant_id: int = None,
+    merchant_uuid: str = None,
     entity_type: str = None,
     event_type: str = None,
     from_date: str = None,
@@ -73,42 +73,52 @@ async def get_events(
     """View domain_events outbox with full filter support (admin portal). Returns all matching events."""
     pool = await get_pool()
     async with pool.acquire() as conn:
+        query = """
+            SELECT de.*, m.merchant_uuid 
+            FROM public.domain_events de
+            JOIN public.merchants m ON de.merchant_id = m.merchant_id
+        """
         conditions = []
         params = []
         idx = 1
 
         if status:
-            conditions.append(f"status = ${idx}")
+            conditions.append(f"de.status = ${idx}")
             params.append(status)
             idx += 1
-        if merchant_id:
-            conditions.append(f"merchant_id = ${idx}")
-            params.append(merchant_id)
+        if merchant_uuid:
+            conditions.append(f"m.merchant_uuid = ${idx}")
+            params.append(merchant_uuid)
             idx += 1
         if entity_type:
-            conditions.append(f"entity_type = ${idx}")
+            conditions.append(f"de.entity_type = ${idx}")
             params.append(entity_type)
             idx += 1
         if event_type:
-            conditions.append(f"event_type = ${idx}")
+            conditions.append(f"de.event_type = ${idx}")
             params.append(event_type)
             idx += 1
         if from_date:
-            conditions.append(f"created_at >= ${idx}::timestamptz")
+            conditions.append(f"de.created_at >= ${idx}::timestamptz")
             params.append(from_date)
             idx += 1
         if to_date:
-            conditions.append(f"created_at <= ${idx}::timestamptz + interval '1 day'")
+            conditions.append(f"de.created_at <= ${idx}::timestamptz + interval '1 day'")
             params.append(to_date)
             idx += 1
 
         where = " AND ".join(conditions) if conditions else "TRUE"
 
         rows = await conn.fetch(
-            f"SELECT * FROM public.domain_events WHERE {where} ORDER BY created_at DESC",
+            f"{query} WHERE {where} ORDER BY de.created_at DESC",
             *params,
         )
-        return [dict(r) for r in rows]
+        events = []
+        for r in rows:
+            event_dict = dict(r)
+            event_dict.pop("merchant_id", None)
+            events.append(event_dict)
+        return events
 
 
 @app.get("/health", tags=["health"])

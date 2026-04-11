@@ -35,7 +35,7 @@ async def resolve_merchant_uuid_to_id(merchant_uuid: str) -> int | None:
     pool = await get_core_replica_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT merchant_id FROM public.merchants WHERE merchant_uuid = $1",
+            "SELECT merchant_id FROM public.merchants WHERE merchant_uuid = $1::uuid",
             merchant_uuid,
         )
 
@@ -72,7 +72,7 @@ async def resolve_merchant_schema(merchant_id: int) -> str:
 
 # ─── Bulk Query Results ───────────────────────────────────
 
-def _build_bulk_response(rows: list[dict], limit: int, cursor_field: str, id_field: str, merchant_id: int = None, total_count: int = None) -> dict:
+def _build_bulk_response(rows: list[dict], limit: int, cursor_field: str, id_field: str, merchant_id: int = None, total_count: int = None, merchant_uuid: str = None) -> dict:
     """Build standardized bulk API response with cursor pagination."""
     has_more = len(rows) > limit
     data = rows[:limit]  # Trim the extra row used for has_more detection
@@ -80,7 +80,15 @@ def _build_bulk_response(rows: list[dict], limit: int, cursor_field: str, id_fie
     next_cursor = None
     if has_more and data:
         last = data[-1]
-        next_cursor = encode_cursor(last[cursor_field], str(last[id_field]))
+        t_val = last[cursor_field]
+        # t_val might be a string since _serialize_row isoformats datetimes
+        from datetime import datetime
+        if isinstance(t_val, str):
+            try:
+                t_val = datetime.fromisoformat(t_val)
+            except ValueError:
+                pass
+        next_cursor = encode_cursor(t_val, str(last[id_field]))
 
     response = {
         "object": "list",
@@ -93,7 +101,9 @@ def _build_bulk_response(rows: list[dict], limit: int, cursor_field: str, id_fie
     }
 
     metadata = {}
-    if merchant_id:
+    if merchant_uuid:
+        metadata["merchant_id"] = merchant_uuid
+    elif merchant_id:
         metadata["merchant_id"] = merchant_id
     if total_count is not None:
         metadata["total_count"] = total_count
@@ -120,6 +130,7 @@ def _serialize_row(row: dict) -> dict:
 
 async def get_payments(
     merchant_id: int,
+    merchant_uuid: str = None,
     cursor: str = None,
     limit: int = 100,
     status: str = None,
@@ -191,13 +202,14 @@ async def get_payments(
             total_count = await conn.fetchval(count_query, *params[:-1])
 
     serialized = [_serialize_row(dict(r)) for r in rows]
-    return _build_bulk_response(serialized, limit, "updated_at", "payment_id", merchant_id, total_count)
+    return _build_bulk_response(serialized, limit, "updated_at", "payment_id", merchant_id, total_count, merchant_uuid)
 
 
 # ─── Customers ────────────────────────────────────────────
 
 async def get_customers(
     merchant_id: int,
+    merchant_uuid: str = None,
     cursor: str = None,
     limit: int = 100,
     updated_since: datetime = None,
@@ -242,13 +254,14 @@ async def get_customers(
             total_count = await conn.fetchval(count_query, *params[:-1])
 
     serialized = [_serialize_row(dict(r)) for r in rows]
-    return _build_bulk_response(serialized, limit, "updated_at", "customer_id", merchant_id, total_count)
+    return _build_bulk_response(serialized, limit, "updated_at", "customer_id", merchant_id, total_count, merchant_uuid)
 
 
 # ─── Refunds ──────────────────────────────────────────────
 
 async def get_refunds(
     merchant_id: int,
+    merchant_uuid: str = None,
     cursor: str = None,
     limit: int = 100,
     status: str = None,
@@ -313,13 +326,14 @@ async def get_refunds(
             total_count = await conn.fetchval(count_query, *params[:-1])
 
     serialized = [_serialize_row(dict(r)) for r in rows]
-    return _build_bulk_response(serialized, limit, "updated_at", "refund_id", merchant_id, total_count)
+    return _build_bulk_response(serialized, limit, "updated_at", "refund_id", merchant_id, total_count, merchant_uuid)
 
 
 # ─── Domain Events ────────────────────────────────────────
 
 async def get_events(
     merchant_id: int,
+    merchant_uuid: str = None,
     cursor: str = None,
     limit: int = 100,
     event_type: str = None,
@@ -382,7 +396,24 @@ async def get_events(
             total_count = await conn.fetchval(count_query, *params[:-1])
 
     serialized = [_serialize_row(dict(r)) for r in rows]
-    return _build_bulk_response(serialized, limit, "created_at", "event_id", merchant_id, total_count)
+    for row in serialized:
+        row.pop("merchant_id", None)
+        if isinstance(row.get("payload"), dict):
+            row["payload"].pop("merchant_id", None)
+            if row.get("entity_type") == "merchant":
+                row["entity_id"] = row["payload"].get("merchant_uuid", str(row["entity_id"]))
+        elif isinstance(row.get("payload"), str):
+            import json
+            try:
+                p = json.loads(row["payload"])
+                p.pop("merchant_id", None)
+                if row.get("entity_type") == "merchant":
+                    row["entity_id"] = p.get("merchant_uuid", str(row["entity_id"]))
+                # Convert back to dict so json response is properly rendered instead of escaped string
+                row["payload"] = p
+            except Exception:
+                pass
+    return _build_bulk_response(serialized, limit, "created_at", "event_id", merchant_id, total_count, merchant_uuid)
 
 
 # ─── Assigned Merchants ──────────────────────────────────
@@ -404,4 +435,6 @@ async def get_assigned_merchants(consumer_id: str) -> dict:
         )
 
     data = [_serialize_row(dict(r)) for r in rows]
+    for d in data:
+        d.pop("merchant_id", None)
     return {"object": "list", "data": data, "pagination": {"has_more": False}, "metadata": {"total_count": len(data)}}

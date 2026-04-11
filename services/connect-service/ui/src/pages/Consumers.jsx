@@ -7,6 +7,24 @@ const SCOPE_OPTIONS = [
   'events:read', 'merchants:read', 'webhooks:manage',
 ]
 
+function CopyableText({ text }) {
+  const [copied, setCopied] = React.useState(false)
+  if (!text) return null
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#0f172a', padding: '8px 12px', borderRadius: '6px', border: '1px solid #1e293b', marginTop: '4px' }}>
+      <code style={{ background: 'transparent', padding: 0, margin: 0, flex: 1, color: '#e2e8f0', wordBreak: 'break-all' }}>{text}</code>
+      <button 
+        type="button" 
+        title="Copy to clipboard"
+        onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: copied ? '#10b981' : '#64748b', fontSize: '16px', padding: '2px 4px', display: 'flex', alignItems: 'center' }}
+      >
+        {copied ? '✓' : '📋'}
+      </button>
+    </div>
+  )
+}
+
 export default function Consumers() {
   const [consumers, setConsumers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -116,12 +134,12 @@ export default function Consumers() {
                 <h3>Consumer Created ✓</h3>
                 <div className="secret-box">
                   <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Client ID</label>
-                  <code>{newSecret.client_id}</code>
+                  <CopyableText text={newSecret.client_id} />
                 </div>
-                <div className="secret-box">
+                <div className="secret-box" style={{ marginTop: '16px' }}>
                   <label style={{ fontSize: 12, color: 'var(--text-muted)' }}>Client Secret</label>
-                  <code>{newSecret.client_secret}</code>
-                  <p>⚠ This secret will NOT be shown again. Save it now!</p>
+                  <CopyableText text={newSecret.client_secret} />
+                  <p style={{ marginTop: '12px', fontSize: 13, color: '#ef4444' }}>⚠ This secret will NOT be shown again. Save it now!</p>
                 </div>
                 <div className="modal-actions">
                   <button className="btn btn-primary" onClick={() => { setShowCreate(false); setNewSecret(null) }}>Done</button>
